@@ -25,7 +25,7 @@ public class TCPServerSelector {
             listnChannel.register(selector, SelectionKey.OP_ACCEPT);
        // }
         // Create a handler that will implement the protocol
-        TCPProtocol protocol = new EchoSelectorProtocol(BUFSIZE);
+        TCPProtocol protocol = new ProxySelectorProtocol(BUFSIZE);
         while (true) { // Run forever, processing available I/O operations
             // Wait for some channel to be ready (or timeout)
             if (selector.select(TIMEOUT) == 0) { // returns # of ready chans
@@ -54,4 +54,3 @@ public class TCPServerSelector {
         }
     }
 }
-    }
