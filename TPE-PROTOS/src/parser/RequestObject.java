@@ -8,13 +8,16 @@ public class RequestObject {
 	private RequestType type;
 	private List<String> params;
 	
-	public RequestObject(RequestType type){
-		this.type = type;
+	public RequestObject(){
 		params = new ArrayList<String>();
 	}
 	
-	public void addParam(String param){
+	public void addParamS(String param){
 		params.add(param);
+	}
+	
+	public void setType(RequestType type){
+		this.type = type;
 	}
 	
 	public RequestType getType(){
