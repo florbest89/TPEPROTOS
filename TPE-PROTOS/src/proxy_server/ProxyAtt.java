@@ -1,24 +1,34 @@
 package proxy_server;
 
-import java.net.Socket;
 import java.nio.ByteBuffer;
 
 public class ProxyAtt {
 	
-	private ByteBuffer buffer;
-	private Socket socket;
+	//Buffer to read from client
+	private ByteBuffer clnt_rd;
+	//Buffer to write for client
+	private ByteBuffer clnt_wr;
+	//Buffer to read from origin server
+	private ByteBuffer originsr_rd;
+	//Buffer to write for origin server
+	private ByteBuffer originsr_wr;
+	//Indicates wether the user is logged or not. 
 	private boolean logged;
+	//Indicates if the user is admin
 	private boolean admin;
+	//Indicates if it is time for client or server
+	private boolean isclient;
 	
-	public ProxyAtt(ByteBuffer buffer){
-		this.buffer = buffer;
+	public ProxyAtt(int bufSize){
+		clnt_rd = ByteBuffer.allocate(bufSize);
+		clnt_wr = ByteBuffer.allocate(bufSize);
+		originsr_rd = ByteBuffer.allocate(bufSize);
+		originsr_wr = ByteBuffer.allocate(bufSize);
 		logged = false;
 		admin = false;
+		isclient = true;
 	}
 	
-	public void setSocket(Socket socket){
-		this.socket  = socket;
-	}
 	
 	public boolean isLogged(){
 		return logged;
@@ -28,8 +38,12 @@ public class ProxyAtt {
 		return admin;
 	}
 	
-	public ByteBuffer getBuffer(){
-		return buffer;
+	public void setClient(boolean isclient){
+		this.isclient = isclient;
+	}
+	
+	public boolean isClient(){
+		return isclient;
 	}
 	
 	public void setLogState(boolean state){
@@ -38,6 +52,22 @@ public class ProxyAtt {
 	
 	public void setAdmin(boolean admin){
 		this.admin = admin;
+	}
+	
+	public ByteBuffer getClntRd(){
+		return clnt_rd;
+	}
+	
+	public ByteBuffer getClntWr(){
+		return clnt_wr;
+	}
+	
+	public ByteBuffer getServerRd(){
+		return originsr_rd;
+	}
+	
+	public ByteBuffer getServerWr(){
+		return originsr_wr;
 	}
 	
 

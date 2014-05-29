@@ -43,34 +43,38 @@ public class ProxySelectorProtocol implements TCPProtocol {
         clntChan.configureBlocking(false); // Must be nonblocking to register
         // Register the selector with new channel for read and attach byte
         // buffer
-        clntChan.register(key.selector(), SelectionKey.OP_READ, new ProxyAtt(ByteBuffer.allocate(bufSize)));
+        clntChan.register(key.selector(), SelectionKey.OP_READ, new ProxyAtt(bufSize));
     }
 
     
     //Aca hay que hacer que el parser lea el request del cliente
     public void handleRead(SelectionKey key) throws IOException {
         // Client socket channel has pending data
-        SocketChannel clntChan = (SocketChannel) key.channel();
+        SocketChannel channel = (SocketChannel) key.channel();
         
         ProxyAtt attachment = (ProxyAtt) key.attachment();
+                
+        if(attachment.isClient()){
+        	ByteBuffer buf = attachment.getClntRd();
+        	long bytesRead = channel.read(buf);
+        	if (bytesRead == -1) { // Did the other end close?
+        		channel.close();
+        	} else if (bytesRead > 0) {        		
+        		RequestObject request = reqParser.parse(buf);
+        		RequestType type = request.getType();
+        		switch(type){
+	        		case USER: logUser(request.getParams(), attachment);
+	        		case PASS: passwd(request.getParams(),attachment);
+	        		case CAPA: capa(attachment);
+	        		case L33T: l33t(attachment, request.getParams());
+	        		case ROTATION: rotation(attachment,request.getParams());
+        		}
+        		
+          		// Indicate via key that reading/writing are both of interest now.
+        		key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+        		
+        }
         
-        ByteBuffer buf = attachment.getBuffer();
-        long bytesRead = clntChan.read(buf);
-        if (bytesRead == -1) { // Did the other end close?
-            clntChan.close();
-        } else if (bytesRead > 0) {
-        	
-        	RequestObject request = reqParser.parse(buf);
-        	RequestType type = request.getType();
-        	switch(type){
-        		case USER: logUser(request.getParams(), attachment);
-        		case PASS: passwd(request.getParams(),attachment);
-        		case CAPA: capa(attachment);
-        		case L33T: l33t(attachment, request.getParams());
-        		case ROTATION: rotation(attachment,request.getParams());
-        	}
-            // Indicate via key that reading/writing are both of interest now.
-            key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
         }
     }
 
@@ -100,23 +104,10 @@ public class ProxySelectorProtocol implements TCPProtocol {
     	
     	String username = params.get(0);
     	String serverAddr = usersServers.get(username);
-    	Socket socket;
     	
-    	if(serverAddr != null){
-    		socket = new Socket(InetAddress.getByName(serverAddr),port);    		
-    	} else{
-    		socket = new Socket(InetAddress.getByName(defaultServer),port);
-    	}
+    	SocketChannel serverChan = 
     	
-    	InputStream in = socket.getInputStream();
-    	OutputStream out = socket.getOutputStream();
     	
-    	String request = "USER " + username;
-    	byte[] data = request.getBytes();
-    	
-    	out.write(data);
-    	
-    	//FALTA CONTINUAR
     	
     }
     
