@@ -1,44 +1,47 @@
 package parser;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 public class RequestParser {
-	
-	public RequestObject parse(ByteBuffer buffer){
+
+	public RequestObject parse(ByteBuffer buffer) {
+
+		String request = new String(buffer.array(),Charset.forName("UTF-8"));
 		
-		String request = new String(buffer.array());
-		String[] params = request.split(" ");
-		
+		int aux = request.indexOf('\0');		
+		request = request.substring(0, aux - 1);
+		String[] params = request.split(" ");		
+
 		RequestObject reqOb = new RequestObject();
 		String cmd = params[0];
 		
-		if(cmd.equals("USER")){
+
+		if (cmd.equalsIgnoreCase("USER")) {
 			reqOb.setType(RequestType.USER);
-		}else{
-			if(cmd.equals("PASS")){
-				reqOb.setType(RequestType.PASS);
+		} else {
+			if (cmd.equalsIgnoreCase("CAPA")) {
+				reqOb.setType(RequestType.CAPA);
 			} else {
-				if(cmd.equals("CAPA")){
-					reqOb.setType(RequestType.CAPA);
+				if (cmd.equalsIgnoreCase("TOP")) {
+					reqOb.setType(RequestType.TOP);
 				} else {
-					if(cmd.equals("TOP")){
-						reqOb.setType(RequestType.TOP);
+					if (cmd.equalsIgnoreCase("HISTOGRAM")) {
+						reqOb.setType(RequestType.HISTOGRAM);
 					} else {
-						if(cmd.equals("HISTOGRAM")){
-							reqOb.setType(RequestType.HISTOGRAM);
+						if (cmd.equalsIgnoreCase("L33T")) {
+							reqOb.setType(RequestType.L33T);
 						} else {
-							if(cmd.equals("L33T")){
-								reqOb.setType(RequestType.L33T);
+							if (cmd.equalsIgnoreCase("ROTATION")) {
+								reqOb.setType(RequestType.ROTATION);
 							} else {
-								if(cmd.equals("ROTATION")){
-									reqOb.setType(RequestType.ROTATION);
+								if (cmd.equalsIgnoreCase("SETSERVER")) {
+									reqOb.setType(RequestType.SETSERVER);
 								} else {
-									if(cmd.equals("SETSERVER")){
-										reqOb.setType(RequestType.SETSERVER);
+									if (cmd.equalsIgnoreCase("QUIT")) {
+										reqOb.setType(RequestType.QUIT);
 									} else {
-										if(cmd.equals("QUIT")){
-											reqOb.setType(RequestType.QUIT);
-										} 
+										reqOb.setType(RequestType.ETC);
 									}
 								}
 							}
@@ -47,13 +50,13 @@ public class RequestParser {
 				}
 			}
 		}
-		
-		for(int i=1; i < params.length ; i++ ){
-			reqOb.addParamS(params[i]);
+
+		for (int i = 0; i < params.length; i++) {
+			reqOb.addParams(params[i]);
 		}
-		
+
 		return reqOb;
-		
+
 	}
 
 }

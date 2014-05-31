@@ -1,6 +1,7 @@
 package proxy_server;
 
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 public class ProxyAtt {
 	
@@ -18,15 +19,17 @@ public class ProxyAtt {
 	private boolean admin;
 	//Indicates if it is time for client or server
 	private boolean isclient;
+	//Client SocketChannel
+	private SocketChannel clntChannel;
 	
-	public ProxyAtt(int bufSize){
+	public ProxyAtt(int bufSize,SocketChannel clntChannel){
 		clnt_rd = ByteBuffer.allocate(bufSize);
 		clnt_wr = ByteBuffer.allocate(bufSize);
 		originsr_rd = ByteBuffer.allocate(bufSize);
 		originsr_wr = ByteBuffer.allocate(bufSize);
 		logged = false;
 		admin = false;
-		isclient = true;
+		this.clntChannel = clntChannel;
 	}
 	
 	
@@ -37,13 +40,9 @@ public class ProxyAtt {
 	public boolean isAdmin(){
 		return admin;
 	}
-	
-	public void setClient(boolean isclient){
-		this.isclient = isclient;
-	}
-	
-	public boolean isClient(){
-		return isclient;
+		
+	public boolean isClient(SocketChannel channel){
+		return clntChannel.equals(channel);
 	}
 	
 	public void setLogState(boolean state){
@@ -69,6 +68,7 @@ public class ProxyAtt {
 	public ByteBuffer getServerWr(){
 		return originsr_wr;
 	}
+	
 	
 
 }

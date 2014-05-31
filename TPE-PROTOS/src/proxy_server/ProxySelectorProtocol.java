@@ -18,187 +18,261 @@ import java.util.Map;
 import parser.RequestObject;
 import parser.RequestParser;
 import parser.RequestType;
+import parser.ResponseObject;
 import parser.ResponseParser;
 
 public class ProxySelectorProtocol implements TCPProtocol {
-	
-    private int bufSize; // Size of I/O buffer
-    private Map<String,String> usersServers = new HashMap<String,String>();
-    private RequestParser reqParser = new RequestParser();
-    private ResponseParser respParser = new ResponseParser();
-    private String defaultServer = "localhost";
-    private String admin = "admin@protos.com";
-    private int port = 110;
-    private boolean l33t;
-    private boolean rotation;
 
-    public ProxySelectorProtocol(int bufSize) {
-        this.bufSize = bufSize;
-        l33t = false;
-        rotation = false;
-    }
+	private int bufSize; // Size of I/O buffer
+	private Map<String, String> usersServers = new HashMap<String, String>();
+	private RequestParser reqParser = new RequestParser();
+	private ResponseParser respParser = new ResponseParser();
+	private String defaultServer = "localhost";
+	private String admin = "admin@protos.com";
+	private int port = 110;
+	private boolean l33t;
+	private boolean rotation;
 
-    public void handleAccept(SelectionKey key) throws IOException {
-        SocketChannel clntChan = ((ServerSocketChannel) key.channel()).accept();
-        clntChan.configureBlocking(false); // Must be nonblocking to register
-        // Register the selector with new channel for read and attach byte
-        // buffer
-        clntChan.register(key.selector(), SelectionKey.OP_READ, new ProxyAtt(bufSize));
-    }
+	public ProxySelectorProtocol(int bufSize) {
+		this.bufSize = bufSize;
+		l33t = false;
+		rotation = false;
+	}
 
-    
-    //Aca hay que hacer que el parser lea el request del cliente
-    public void handleRead(SelectionKey key) throws IOException {
-        // Client socket channel has pending data
-        SocketChannel channel = (SocketChannel) key.channel();
-        
-        ProxyAtt attachment = (ProxyAtt) key.attachment();
-                
-        if(attachment.isClient()){
-        	ByteBuffer buf = attachment.getClntRd();
-        	long bytesRead = channel.read(buf);
-        	if (bytesRead == -1) { // Did the other end close?
-        		channel.close();
-        	} else if (bytesRead > 0) {        		
-        		RequestObject request = reqParser.parse(buf);
-        		RequestType type = request.getType();
-        		switch(type){
-	        		case USER: logUser(request.getParams(), attachment);
-	        		case PASS: passwd(request.getParams(),attachment);
-	        		case CAPA: capa(attachment);
-	        		case L33T: l33t(attachment, request.getParams());
-	        		case ROTATION: rotation(attachment,request.getParams());
-        		}
-        		
-          		// Indicate via key that reading/writing are both of interest now.
-        		key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-        		
-        }
-        
-        }
-    }
+	public void handleAccept(SelectionKey key) throws IOException {
+		SocketChannel clntChan = ((ServerSocketChannel) key.channel()).accept();
+		clntChan.configureBlocking(false); // Must be nonblocking to register
+		// Register the selector with new channel for read and attach byte
+		// buffer
+		clntChan.register(key.selector(), SelectionKey.OP_READ, new ProxyAtt(
+				bufSize, clntChan));
+	}
 
+	// Aca hay que hacer que el parser lea el request del cliente
+	public void handleRead(SelectionKey key) throws IOException {
+		// Client socket channel has pending data
+		SocketChannel channel = (SocketChannel) key.channel();
 
-	//Aca hay que hacer que el proxy maneje y devuelva el response del server
-    public void handleWrite(SelectionKey key) throws IOException {
-        /*
-         * Channel is available for writing, and key is valid (i.e., client
-         * channel not closed).
-         */
-        // Retrieve data read earlier
-    	
-    	ProxyAtt attachment = (ProxyAtt) key.attachment();
-    	
-        ByteBuffer buf = attachment.getBuffer();
-        //buf.flip(); // Prepare buffer for writing
-        SocketChannel clntChan = (SocketChannel) key.channel();
-        clntChan.write(buf);
-        if (!buf.hasRemaining()) { // Buffer completely written?
-            // Nothing left, so no longer interested in writes
-            key.interestOps(SelectionKey.OP_READ);
-        }
-        buf.compact(); // Make room for more data to be read in
-    }
-    
-    private void logUser(List<String> params, ProxyAtt attachment) throws UnknownHostException, IOException{
-    	
-    	String username = params.get(0);
-    	String serverAddr = usersServers.get(username);
-    	
-    	SocketChannel serverChan = 
-    	
-    	
-    	
-    }
-    
-    
-    private void passwd(List<String> params, ProxyAtt attachment) {
-    	// TODO Auto-generated method stub
-    	
-    }
-    
-    private void capa(ProxyAtt attachment){
-    	
-    	String response = "CAPA \n";
-    	
-    	if(!attachment.isLogged()) {
-    		response = response + "CAPA \n USER \n PASS \n QUIT \n";
-    	} else {
-    		if (attachment.isLogged() && attachment.isAdmin()){
-    			response = response + "CAPA \n TOP \n HISTOGRAM \n L33T \n ROTATION \n QUIT \n ";
-    		} else {
-    			response = response + "CAPA \n TOP \n QUIT \n";
-    		}
-    	}
-    	
-    	ByteBuffer buf = attachment.getBuffer();
-    	buf.flip();
-    	//Put in the buffer the response from the CAPA command
-    	buf.put(response.getBytes());
-    	
-    }
-    
-    //agregar el log
-    private void l33t(ProxyAtt attachment, List<String> params){
-    	
-    	String statusCode;
-    	
-    	if(!attachment.isAdmin()){
-    		statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings \n";
-    	} else {
-    		if(params.get(0).equals("ON")){
-    			statusCode = "+OK l33t transformation on \n";
-    			setl33t(true);    			
-    		} else {
-    			if(params.get(0).equals("OFF")){
-    				statusCode = "+OK l33t transformation off \n";
-    				setl33t(false);
-    			} else { 
-    				statusCode = "-ERR[INVALID] Invalid parameters \n";
-    			}
-    		}
-    		
-    	}
-    	
-    	ByteBuffer buf = attachment.getBuffer();
-    	buf.flip();
-    	buf.put(statusCode.getBytes());
-    	
-    	
-    }
-    
-    private void setl33t(boolean l33t){
-    	this.l33t = l33t;
-    }
-    
-    //agregar logs
-    private void rotation(ProxyAtt attachment,List<String> params){
-    	String statusCode;
-    	
-    	if(!attachment.isAdmin()){
-    		statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings \n";
-    	} else {
-    		if(params.get(0).equals("ON")){
-    			statusCode = "+OK rotation transformation on \n";
-    			setRotation(true);    			
-    		} else {
-    			if(params.get(0).equals("OFF")){
-    				statusCode = "+OK rotation transformation off \n";
-    				setRotation(false);
-    			} else { 
-    				statusCode = "-ERR[INVALID] Invalid parameters \n";
-    			}
-    		}
-    		
-    	}
-    	
-    	ByteBuffer buf = attachment.getBuffer();
-    	buf.flip();
-    	buf.put(statusCode.getBytes());
-    	
-    }
-    
-    private void setRotation(boolean rotation){
-    	this.rotation = rotation;
-    }
+		ProxyAtt attachment = (ProxyAtt) key.attachment();
+		ByteBuffer buf;
+
+		if (attachment.isClient(channel)) {
+			buf = attachment.getClntRd();
+			long bytesRead = channel.read(buf);
+			System.out.println("Estoy leyendo del cliente");
+			if (bytesRead == -1) { // Did the other end close?
+				channel.close();
+			} else if (bytesRead > 0) {
+
+				// Parse the client's request
+				RequestObject request = reqParser.parse(buf);
+				RequestType type = request.getType();
+				switch (type) {
+				case USER:
+					logUser(request.getParams(), attachment, key);
+					break;
+				case CAPA:
+					capaReq(attachment);
+					break;
+				case L33T:
+					l33t(attachment, request.getParams());
+					break;
+				case ROTATION:
+					rotation(attachment, request.getParams());
+					break;
+				case ETC:
+					etc(attachment, request.getParams());
+					break;
+
+				}
+
+				// Indicate via key that reading/writing are both of interest
+				// now.
+				// key.interestOps(SelectionKey.OP_READ |
+				// SelectionKey.OP_WRITE);
+				key.interestOps(SelectionKey.OP_WRITE);
+
+			}
+
+		} else {
+
+			buf = attachment.getServerRd();
+			long bytesRead = channel.read(buf);
+			if (bytesRead == -1) { // Did the other end close?
+				channel.close();
+			} else if (bytesRead > 0) {
+				System.out.println("Estoy leyendo del servidor");
+				System.out.println(new String(buf.array()));
+				ResponseObject respOb = respParser.parse(buf);
+				ByteBuffer resp = attachment.getClntWr();
+				resp.put(buf.array());
+				key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+			}
+
+		}
+		// Como ya lei lo que me mando el servidor
+		buf.clear();
+	}
+
+	// Aca hay que hacer que el proxy maneje y devuelva el response del server
+	public void handleWrite(SelectionKey key) throws IOException {
+		/*
+		 * Channel is available for writing, and key is valid (i.e., client
+		 * channel not closed).
+		 */
+		// Retrieve data read earlier
+
+		ProxyAtt attachment = (ProxyAtt) key.attachment();
+
+		ByteBuffer buf;
+		SocketChannel channel = (SocketChannel) key.channel();
+
+		if (attachment.isClient((channel))) {
+			buf = attachment.getClntWr();
+			System.out.println("Voy a responderle al cliente "
+					+ new String(buf.array()));
+		} else {
+			buf = attachment.getServerWr();
+			System.out.println("Voy a preguntarle al servidor "
+					+ new String(buf.array()));
+		}
+		buf.flip(); // Prepare buffer for writing
+		channel.write(buf);
+		if (!buf.hasRemaining()) { // Buffer completely written?
+			// Nothing left, so no longer interested in writes
+			key.interestOps(SelectionKey.OP_READ);
+		}
+		buf.compact(); // Make room for more data to be read in
+	}
+
+	private void logUser(List<String> params, ProxyAtt attachment,
+			SelectionKey key) throws UnknownHostException, IOException {
+
+		// El param[0] es el comando USER
+		String username = params.get(1);
+		String serverAddr = usersServers.get(username);
+
+		if (serverAddr == null) {
+			serverAddr = defaultServer;
+		}
+
+		System.out.println("Estoy en el metodo USER y el user es: " + username);
+
+		ByteBuffer buf = attachment.getServerWr();
+		// Pongo lo que escribio el cliente en lo que le pido al servidor
+		buf.put(attachment.getClntRd().array());
+
+		// Create a new SocketChannel for the origin server
+		SocketChannel channel = SocketChannel.open();
+		// Initiate connection to server and repeatedly poll until complete
+		if (!channel.connect(new InetSocketAddress(serverAddr, port))) {
+			while (!channel.finishConnect()) {
+				System.out.print("."); // Do something else
+			}
+		}
+		channel.configureBlocking(false);
+
+		// I register a new key with the same ProxyAtt but with non-client state
+		channel.register(key.selector(), SelectionKey.OP_READ, attachment);
+
+	}
+
+	// CAPA request from client, differs from capa response
+	private void capaReq(ProxyAtt attachment) {
+
+		System.out.println("Estoy en el metodo CAPA");
+		String response = "+OK\nCAPA \n";
+
+		if (!attachment.isLogged()) {
+			response = response + "USER\nPASS\nQUIT\n";
+			System.out.println(response.getBytes().length);
+
+			ByteBuffer buf = attachment.getClntWr();
+
+			// Put in the buffer the response from the CAPA command
+			buf.put(response.getBytes());
+		} else {
+			// I have to obtain the result from CAPA command from the origin
+			// server
+			attachment.setClient(false);
+		}
+	}
+
+	// agregar el log
+	private void l33t(ProxyAtt attachment, List<String> params) {
+
+		String statusCode;
+
+		if (!attachment.isAdmin()) {
+			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
+		} else {
+			if (params.get(0).equals("ON")) {
+				statusCode = "+OK l33t transformation on. \n";
+				setl33t(true);
+			} else {
+				if (params.get(0).equals("OFF")) {
+					statusCode = "+OK l33t transformation off. \n";
+					setl33t(false);
+				} else {
+					statusCode = "-ERR[INVALID] Invalid parameters. \n";
+				}
+			}
+
+		}
+
+		ByteBuffer buf = attachment.getClntWr();
+		buf.flip();
+		buf.put(statusCode.getBytes());
+
+	}
+
+	private void etc(ProxyAtt attachment, List<String> params) {
+
+		String cmd = "";
+
+		for (String each : params) {
+			cmd = cmd + each + " ";
+		}
+
+		ByteBuffer fwd = attachment.getServerWr();
+		fwd.put(cmd.getBytes());
+
+		attachment.setClient(false);
+
+	}
+
+	private void setl33t(boolean l33t) {
+		this.l33t = l33t;
+	}
+
+	// agregar logs
+	private void rotation(ProxyAtt attachment, List<String> params) {
+		String statusCode;
+
+		if (!attachment.isAdmin()) {
+			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
+		} else {
+			if (params.get(0).equals("ON")) {
+				statusCode = "+OK rotation transformation on. \n";
+				setRotation(true);
+			} else {
+				if (params.get(0).equals("OFF")) {
+					statusCode = "+OK rotation transformation off. \n";
+					setRotation(false);
+				} else {
+					statusCode = "-ERR[INVALID] Invalid parameters. \n";
+				}
+			}
+
+		}
+
+		ByteBuffer buf = attachment.getClntWr();
+		buf.flip();
+		buf.put(statusCode.getBytes());
+
+	}
+
+	private void setRotation(boolean rotation) {
+		this.rotation = rotation;
+	}
 }

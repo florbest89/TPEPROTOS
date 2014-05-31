@@ -12,7 +12,7 @@ public class RequestObject {
 		params = new ArrayList<String>();
 	}
 	
-	public void addParamS(String param){
+	public void addParams(String param){
 		params.add(param);
 	}
 	
