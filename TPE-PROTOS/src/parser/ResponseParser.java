@@ -7,14 +7,18 @@ public class ResponseParser {
 	
 	public ResponseObject parse(ByteBuffer buf){
 		
-		String response = new String(buf.array(),Charset.forName("UTF-8"));
+		String response = new String(Common.transferData(buf),Charset.forName("UTF-8"));
+		String[] params;
 		
-		int aux = response.indexOf('\0');		
-		response = response.substring(0, aux - 1);
-		String[] params = response.split(".");
+		if(!response.contains("CAPA")){
+			int index = response.indexOf('\n');		
+			response = response.substring(0, index);			
+			params = response.split(" ");
+		} else {
+			params = response.split("\n");
+		}		
 		
 		String statusCode = params[0];
-		System.out.println("El status code es " + statusCode);
 		
 		ResponseObject respOb = new ResponseObject(statusCode);
 		

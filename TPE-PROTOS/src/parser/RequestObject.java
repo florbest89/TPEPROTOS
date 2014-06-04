@@ -27,5 +27,17 @@ public class RequestObject {
 	public List<String> getParams(){
 		return params;
 	}
+	
+	public String getCommand(){
+		
+		String cmd = "";
+		
+		for(String each: params){
+			cmd = cmd + each + " ";
+		}
+		
+		return cmd;
+		
+	}
 
 }

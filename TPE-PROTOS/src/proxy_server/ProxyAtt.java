@@ -17,8 +17,6 @@ public class ProxyAtt {
 	private boolean logged;
 	//Indicates if the user is admin
 	private boolean admin;
-	//Indicates if it is time for client or server
-	private boolean isclient;
 	//Client SocketChannel
 	private SocketChannel clntChannel;
 	

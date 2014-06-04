@@ -1,20 +1,18 @@
 package proxy_server;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import parser.Common;
 import parser.RequestObject;
 import parser.RequestParser;
 import parser.RequestType;
@@ -28,7 +26,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private RequestParser reqParser = new RequestParser();
 	private ResponseParser respParser = new ResponseParser();
 	private String defaultServer = "localhost";
-	private String admin = "admin@protos.com";
+	// admin = admin@protos.com
+	private String admin = "florcha@domain2.com";
 	private int port = 110;
 	private boolean l33t;
 	private boolean rotation;
@@ -50,68 +49,80 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	// Aca hay que hacer que el parser lea el request del cliente
 	public void handleRead(SelectionKey key) throws IOException {
+
 		// Client socket channel has pending data
 		SocketChannel channel = (SocketChannel) key.channel();
 
 		ProxyAtt attachment = (ProxyAtt) key.attachment();
 		ByteBuffer buf;
 
-		if (attachment.isClient(channel)) {
-			buf = attachment.getClntRd();
-			long bytesRead = channel.read(buf);
-			System.out.println("Estoy leyendo del cliente");
-			if (bytesRead == -1) { // Did the other end close?
-				channel.close();
-			} else if (bytesRead > 0) {
+		long bytesRead;
 
-				// Parse the client's request
+		// See if this channel belongs to the client
+		if (attachment.isClient(channel)) {
+
+			buf = attachment.getClntRd();
+			bytesRead = channel.read(buf);
+
+			/*
+			 * System.out.println("Estoy leyendo del cliente: " + new
+			 * String(Common.transferData(buf)));
+			 */
+
+			if (bytesRead == -1) {
+				channel.close();
+			} else {
+
 				RequestObject request = reqParser.parse(buf);
-				RequestType type = request.getType();
-				switch (type) {
+
+				switch (request.getType()) {
 				case USER:
 					logUser(request.getParams(), attachment, key);
 					break;
 				case CAPA:
-					capaReq(attachment);
-					break;
-				case L33T:
-					l33t(attachment, request.getParams());
-					break;
-				case ROTATION:
-					rotation(attachment, request.getParams());
+					capaReq(request.getParams(), attachment);
 					break;
 				case ETC:
-					etc(attachment, request.getParams());
+					etc(request.getParams(), attachment);
 					break;
 
 				}
-
-				// Indicate via key that reading/writing are both of interest
-				// now.
-				// key.interestOps(SelectionKey.OP_READ |
-				// SelectionKey.OP_WRITE);
-				key.interestOps(SelectionKey.OP_WRITE);
-
 			}
-
 		} else {
-
 			buf = attachment.getServerRd();
-			long bytesRead = channel.read(buf);
-			if (bytesRead == -1) { // Did the other end close?
+			bytesRead = channel.read(buf);
+
+			// The other end closed
+			if (bytesRead == -1) {
 				channel.close();
-			} else if (bytesRead > 0) {
-				System.out.println("Estoy leyendo del servidor");
-				System.out.println(new String(buf.array()));
+			} else {
 				ResponseObject respOb = respParser.parse(buf);
-				ByteBuffer resp = attachment.getClntWr();
-				resp.put(buf.array());
-				key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+				 System.out.println("Estoy leyendo del servidor " +
+				 respOb.getStatusCode() + " " + respOb.getBody());
+				ByteBuffer clnt_wr = attachment.getClntWr();
+
+				buf.flip();
+				clnt_wr.put(buf);
+
+				System.out.println(respOb.getBody());
+				if (respOb.getBody().contains("CAPA")) {
+					capaResp(attachment);
+				}
+
+				System.out.println("El response contiene Ok logged in? " + respOb.getBody().contains("Logged in"));
+				System.out.println(respOb.getBody());
+				
+				if (respOb.getBody().contains("Logged in")) {
+					attachment.setLogState(true);
+				}
+
 			}
 
 		}
-		// Como ya lei lo que me mando el servidor
+
 		buf.clear();
+		key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+
 	}
 
 	// Aca hay que hacer que el proxy maneje y devuelva el response del server
@@ -128,21 +139,31 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		SocketChannel channel = (SocketChannel) key.channel();
 
 		if (attachment.isClient((channel))) {
+
 			buf = attachment.getClntWr();
-			System.out.println("Voy a responderle al cliente "
-					+ new String(buf.array()));
+			/*
+			 * System.out.println("Voy a responderle al cliente " + new
+			 * String(Common.transferData(buf), Charset .forName("UTF-8")));
+			 */
 		} else {
+
 			buf = attachment.getServerWr();
-			System.out.println("Voy a preguntarle al servidor "
-					+ new String(buf.array()));
+			/*
+			 * System.out.println("Voy a preguntarle al servidor " + new
+			 * String(Common.transferData(buf), Charset .forName("UTF-8")));
+			 */
 		}
+
 		buf.flip(); // Prepare buffer for writing
 		channel.write(buf);
+
 		if (!buf.hasRemaining()) { // Buffer completely written?
 			// Nothing left, so no longer interested in writes
 			key.interestOps(SelectionKey.OP_READ);
 		}
-		buf.compact(); // Make room for more data to be read in
+
+		buf.clear(); // Clear buffer
+		key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 	}
 
 	private void logUser(List<String> params, ProxyAtt attachment,
@@ -156,11 +177,21 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			serverAddr = defaultServer;
 		}
 
-		System.out.println("Estoy en el metodo USER y el user es: " + username);
+		System.out.println("el username es " + username + " y es administrador? " + username.equals(admin));
+		
+		if (username.equals(admin)) {
+			attachment.setAdmin(true);
+		}
 
-		ByteBuffer buf = attachment.getServerWr();
+		ByteBuffer server = attachment.getServerWr();
+		ByteBuffer clnt = attachment.getClntRd();
 		// Pongo lo que escribio el cliente en lo que le pido al servidor
-		buf.put(attachment.getClntRd().array());
+
+		clnt.flip();
+
+		server.put(clnt);
+
+		clnt.clear();
 
 		// Create a new SocketChannel for the origin server
 		SocketChannel channel = SocketChannel.open();
@@ -177,8 +208,29 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	}
 
+	private void capaResp(ProxyAtt attachment) {
+
+		if (attachment.isAdmin() && attachment.isLogged()) {
+
+			System.out.println("user es administrador");
+			
+			ByteBuffer clnt_wr = attachment.getClntWr();
+
+			String response = new String(Common.transferData(clnt_wr),
+					Charset.forName("UTF-8"));
+			String adminOptions = "HISTOGRAM\nL33T\nROTATION\n.\n";
+
+			response = response.replace(".", adminOptions);
+
+			clnt_wr.clear();
+			clnt_wr.put(response.getBytes());
+
+		}
+
+	}
+
 	// CAPA request from client, differs from capa response
-	private void capaReq(ProxyAtt attachment) {
+	private void capaReq(List<String> params, ProxyAtt attachment) {
 
 		System.out.println("Estoy en el metodo CAPA");
 		String response = "+OK\nCAPA \n";
@@ -191,10 +243,16 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 			// Put in the buffer the response from the CAPA command
 			buf.put(response.getBytes());
+
 		} else {
-			// I have to obtain the result from CAPA command from the origin
-			// server
-			attachment.setClient(false);
+
+			ByteBuffer serverbuf = attachment.getServerWr();
+			ByteBuffer clntRd = attachment.getClntRd();
+
+			clntRd.flip();
+			serverbuf.put(clntRd);
+			clntRd.clear();
+
 		}
 	}
 
@@ -221,23 +279,28 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 
 		ByteBuffer buf = attachment.getClntWr();
-		buf.flip();
 		buf.put(statusCode.getBytes());
 
 	}
 
-	private void etc(ProxyAtt attachment, List<String> params) {
+	private void etc(List<String> params, ProxyAtt attachment) {
 
-		String cmd = "";
+		/*String cmd = "";
 
 		for (String each : params) {
 			cmd = cmd + each + " ";
-		}
+		}*/
+		
 
 		ByteBuffer fwd = attachment.getServerWr();
-		fwd.put(cmd.getBytes());
-
-		attachment.setClient(false);
+		ByteBuffer clnt_rd = attachment.getClntRd();
+		
+		System.out.println("Comando " + new String(Common.transferData(clnt_rd),
+				Charset.forName("UTF-8")));
+		
+		clnt_rd.flip();
+		fwd.put(clnt_rd);
+		clnt_rd.clear();
 
 	}
 

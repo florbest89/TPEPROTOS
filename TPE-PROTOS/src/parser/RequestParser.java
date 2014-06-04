@@ -4,18 +4,21 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 public class RequestParser {
-
+	
+	
 	public RequestObject parse(ByteBuffer buffer) {
 
-		String request = new String(buffer.array(),Charset.forName("UTF-8"));
 		
-		int aux = request.indexOf('\0');		
-		request = request.substring(0, aux - 1);
+		String request = new String(Common.transferData(buffer),Charset.forName("UTF-8"));
+		
+		request = request.substring(0, request.indexOf('\n'));
 		String[] params = request.split(" ");		
 
+		
 		RequestObject reqOb = new RequestObject();
 		String cmd = params[0];
 		
+		System.out.println(cmd);
 
 		if (cmd.equalsIgnoreCase("USER")) {
 			reqOb.setType(RequestType.USER);
