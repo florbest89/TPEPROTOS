@@ -82,6 +82,12 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				case CAPA:
 					capaReq(request.getParams(), attachment);
 					break;
+				case L33T:
+					l33t(request.getParams(), attachment);
+					break;
+				case ROTATION:
+					rotation(request.getParams(), attachment);
+					break;
 				case ETC:
 					etc(request.getParams(), attachment);
 					break;
@@ -97,8 +103,10 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				channel.close();
 			} else {
 				ResponseObject respOb = respParser.parse(buf);
-				 System.out.println("Estoy leyendo del servidor " +
-				 respOb.getStatusCode() + " " + respOb.getBody());
+				/*
+				 * System.out.println("Estoy leyendo del servidor " +
+				 * respOb.getStatusCode() + " " + respOb.getBody());
+				 */
 				ByteBuffer clnt_wr = attachment.getClntWr();
 
 				buf.flip();
@@ -109,9 +117,10 @@ public class ProxySelectorProtocol implements TCPProtocol {
 					capaResp(attachment);
 				}
 
-				System.out.println("El response contiene Ok logged in? " + respOb.getBody().contains("Logged in"));
+				System.out.println("El response contiene Ok logged in? "
+						+ respOb.getBody().contains("Logged in"));
 				System.out.println(respOb.getBody());
-				
+
 				if (respOb.getBody().contains("Logged in")) {
 					attachment.setLogState(true);
 				}
@@ -177,8 +186,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			serverAddr = defaultServer;
 		}
 
-		System.out.println("el username es " + username + " y es administrador? " + username.equals(admin));
-		
+		System.out.println("el username es " + username
+				+ " y es administrador? " + username.equals(admin));
+
 		if (username.equals(admin)) {
 			attachment.setAdmin(true);
 		}
@@ -213,12 +223,12 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		if (attachment.isAdmin() && attachment.isLogged()) {
 
 			System.out.println("user es administrador");
-			
+
 			ByteBuffer clnt_wr = attachment.getClntWr();
 
 			String response = new String(Common.transferData(clnt_wr),
 					Charset.forName("UTF-8"));
-			String adminOptions = "HISTOGRAM\nL33T\nROTATION\n.\n";
+			String adminOptions = "HISTOGRAM\nL33T\nROTATION\nSETSERVER\n.\n";
 
 			response = response.replace(".", adminOptions);
 
@@ -257,18 +267,18 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	}
 
 	// agregar el log
-	private void l33t(ProxyAtt attachment, List<String> params) {
+	private void l33t(List<String> params, ProxyAtt attachment) {
 
 		String statusCode;
 
-		if (!attachment.isAdmin()) {
+		if (!(attachment.isAdmin() && attachment.isLogged())) {
 			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
 		} else {
-			if (params.get(0).equals("ON")) {
+			if (params.get(1).equalsIgnoreCase("ON")) {
 				statusCode = "+OK l33t transformation on. \n";
 				setl33t(true);
 			} else {
-				if (params.get(0).equals("OFF")) {
+				if (params.get(1).equalsIgnoreCase("OFF")) {
 					statusCode = "+OK l33t transformation off. \n";
 					setl33t(false);
 				} else {
@@ -285,19 +295,13 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private void etc(List<String> params, ProxyAtt attachment) {
 
-		/*String cmd = "";
-
-		for (String each : params) {
-			cmd = cmd + each + " ";
-		}*/
-		
-
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
-		
-		System.out.println("Comando " + new String(Common.transferData(clnt_rd),
-				Charset.forName("UTF-8")));
-		
+
+		System.out.println("Comando "
+				+ new String(Common.transferData(clnt_rd), Charset
+						.forName("UTF-8")));
+
 		clnt_rd.flip();
 		fwd.put(clnt_rd);
 		clnt_rd.clear();
@@ -309,17 +313,18 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	}
 
 	// agregar logs
-	private void rotation(ProxyAtt attachment, List<String> params) {
+	private void rotation(List<String> params, ProxyAtt attachment) {
+
 		String statusCode;
 
-		if (!attachment.isAdmin()) {
+		if (!(attachment.isAdmin() && attachment.isLogged())) {
 			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
 		} else {
-			if (params.get(0).equals("ON")) {
+			if (params.get(1).equalsIgnoreCase("ON")) {
 				statusCode = "+OK rotation transformation on. \n";
 				setRotation(true);
 			} else {
-				if (params.get(0).equals("OFF")) {
+				if (params.get(1).equalsIgnoreCase("OFF")) {
 					statusCode = "+OK rotation transformation off. \n";
 					setRotation(false);
 				} else {
@@ -337,5 +342,17 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private void setRotation(boolean rotation) {
 		this.rotation = rotation;
+	}
+	
+	
+	//SETSERVER username originserver
+	private void setServer(List<String> params, ProxyAtt attachment){
+		
+		String statusCode;
+		
+		if(!(attachment.isAdmin() && attachment.isLogged())){
+			
+		}
+		
 	}
 }
