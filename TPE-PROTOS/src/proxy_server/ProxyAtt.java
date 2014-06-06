@@ -17,6 +17,8 @@ public class ProxyAtt {
 	private boolean logged;
 	//Indicates if the user is admin
 	private boolean admin;
+	//Indicates if a username was provided
+	private boolean usr_prov;
 	//Client SocketChannel
 	private SocketChannel clntChannel;
 	
@@ -27,6 +29,7 @@ public class ProxyAtt {
 		originsr_wr = ByteBuffer.allocate(bufSize);
 		logged = false;
 		admin = false;
+		usr_prov = false;
 		this.clntChannel = clntChannel;
 	}
 	
@@ -36,7 +39,7 @@ public class ProxyAtt {
 	}
 	
 	public boolean isAdmin(){
-		return admin;
+		return admin && logged;
 	}
 		
 	public boolean isClient(SocketChannel channel){
@@ -65,6 +68,14 @@ public class ProxyAtt {
 	
 	public ByteBuffer getServerWr(){
 		return originsr_wr;
+	}
+	
+	public void setUsrProv(boolean usr_prov){
+		this.usr_prov = usr_prov;
+	}
+	
+	public boolean usrProvided(){
+		return usr_prov;
 	}
 	
 	
