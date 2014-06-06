@@ -15,7 +15,6 @@ import java.util.Map;
 import parser.Common;
 import parser.RequestObject;
 import parser.RequestParser;
-import parser.RequestType;
 import parser.ResponseObject;
 import parser.ResponseParser;
 
@@ -28,7 +27,12 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private String defaultServer = "localhost";
 	// admin = admin@protos.com
 	private String admin = "florcha@domain2.com";
+	// The proxy welcome message
+	private String welcome_msg = "+OK PDC02-Proxy ready.\n";
 	private int port = 110;
+	// Flags
+	private ProxyCalls flags;
+	// Transformation settings
 	private boolean l33t;
 	private boolean rotation;
 
@@ -36,6 +40,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		this.bufSize = bufSize;
 		l33t = false;
 		rotation = false;
+		flags = new ProxyCalls();
+
 	}
 
 	public void handleAccept(SelectionKey key) throws IOException {
@@ -43,8 +49,12 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		clntChan.configureBlocking(false); // Must be nonblocking to register
 		// Register the selector with new channel for read and attach byte
 		// buffer
-		clntChan.register(key.selector(), SelectionKey.OP_READ, new ProxyAtt(
-				bufSize, clntChan));
+
+		ProxyAtt attachment = new ProxyAtt(bufSize, clntChan);
+
+		attachment.getClntWr().put(welcome_msg.getBytes());
+
+		clntChan.register(key.selector(), SelectionKey.OP_WRITE, attachment);
 	}
 
 	// Aca hay que hacer que el parser lea el request del cliente
@@ -95,6 +105,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				}
 			}
 		} else {
+			
 			buf = attachment.getServerRd();
 			bytesRead = channel.read(buf);
 
@@ -103,26 +114,31 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				channel.close();
 			} else {
 				ResponseObject respOb = respParser.parse(buf);
-				/*
-				 * System.out.println("Estoy leyendo del servidor " +
-				 * respOb.getStatusCode() + " " + respOb.getBody());
-				 */
-				ByteBuffer clnt_wr = attachment.getClntWr();
 
-				buf.flip();
-				clnt_wr.put(buf);
+				if (flags.getWelcome()) {
+					
+					flags.setWelcome(false);
+					
+				} else {
 
-				System.out.println(respOb.getBody());
-				if (respOb.getBody().contains("CAPA")) {
-					capaResp(attachment);
-				}
-
-				System.out.println("El response contiene Ok logged in? "
-						+ respOb.getBody().contains("Logged in"));
-				System.out.println(respOb.getBody());
-
-				if (respOb.getBody().contains("Logged in")) {
-					attachment.setLogState(true);
+					buf.flip();
+					ByteBuffer clnt_wr = attachment.getClntWr();
+					clnt_wr.put(buf);
+					
+					
+					// Reading the status code for the PASS command
+					if (flags.getPass()) {
+						if (respOb.getStatusCode().equals("+OK")) {
+							attachment.setLogState(true);
+						}
+						flags.setPass(false);
+					} else {
+						// Reading the status code for the CAPA command
+						if (flags.getCapa()) {
+							capaResp(attachment);
+							flags.setCapa(false);
+						}
+					}
 				}
 
 			}
@@ -150,17 +166,11 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		if (attachment.isClient((channel))) {
 
 			buf = attachment.getClntWr();
-			/*
-			 * System.out.println("Voy a responderle al cliente " + new
-			 * String(Common.transferData(buf), Charset .forName("UTF-8")));
-			 */
+
 		} else {
 
 			buf = attachment.getServerWr();
-			/*
-			 * System.out.println("Voy a preguntarle al servidor " + new
-			 * String(Common.transferData(buf), Charset .forName("UTF-8")));
-			 */
+
 		}
 
 		buf.flip(); // Prepare buffer for writing
@@ -178,56 +188,73 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private void logUser(List<String> params, ProxyAtt attachment,
 			SelectionKey key) throws UnknownHostException, IOException {
 
-		// El param[0] es el comando USER
-		String username = params.get(1);
-		String serverAddr = usersServers.get(username);
+		if (params.size() > 1) {
 
-		if (serverAddr == null) {
-			serverAddr = defaultServer;
-		}
+			// El param[0] es el comando USER
+			String username = params.get(1);
+			attachment.setUsrProv(true);
+			String serverAddr = usersServers.get(username);
 
-		System.out.println("el username es " + username
-				+ " y es administrador? " + username.equals(admin));
-
-		if (username.equals(admin)) {
-			attachment.setAdmin(true);
-		}
-
-		ByteBuffer server = attachment.getServerWr();
-		ByteBuffer clnt = attachment.getClntRd();
-		// Pongo lo que escribio el cliente en lo que le pido al servidor
-
-		clnt.flip();
-
-		server.put(clnt);
-
-		clnt.clear();
-
-		// Create a new SocketChannel for the origin server
-		SocketChannel channel = SocketChannel.open();
-		// Initiate connection to server and repeatedly poll until complete
-		if (!channel.connect(new InetSocketAddress(serverAddr, port))) {
-			while (!channel.finishConnect()) {
-				System.out.print("."); // Do something else
+			if (serverAddr == null) {
+				serverAddr = defaultServer;
 			}
-		}
-		channel.configureBlocking(false);
 
-		// I register a new key with the same ProxyAtt but with non-client state
-		channel.register(key.selector(), SelectionKey.OP_READ, attachment);
+			System.out.println("el username es " + username
+					+ " y es administrador? " + username.equals(admin));
+
+			if (username.equals(admin)) {
+				attachment.setAdmin(true);
+			}
+
+			ByteBuffer server = attachment.getServerWr();
+			ByteBuffer clnt = attachment.getClntRd();
+			// Pongo lo que escribio el cliente en lo que le pido al servidor
+
+			clnt.flip();
+
+			server.put(clnt);
+
+			clnt.clear();
+
+			// Create a new SocketChannel for the origin server
+			SocketChannel channel = SocketChannel.open();
+			// Initiate connection to server and repeatedly poll until complete
+			if (!channel.connect(new InetSocketAddress(serverAddr, port))) {
+				while (!channel.finishConnect()) {
+					System.out.print("."); // Do something else
+				}
+			}
+			channel.configureBlocking(false);
+
+			// I register a new key with the same ProxyAtt but with non-client
+			// state
+			channel.register(key.selector(), SelectionKey.OP_READ, attachment);
+			//The proxy will be expecting the welcome message
+			flags.setWelcome(true);
+
+		} else {
+			ByteBuffer clnt_wr = attachment.getClntWr();
+			String response = "-ERR[USRNEEDED] need to provide a user.\n";
+
+			clnt_wr.put(response.getBytes());
+		}
 
 	}
 
 	private void capaResp(ProxyAtt attachment) {
 
-		if (attachment.isAdmin() && attachment.isLogged()) {
+		ByteBuffer clnt_wr = attachment.getClntWr();
+
+		if (attachment.isAdmin()) {
 
 			System.out.println("user es administrador");
 
-			ByteBuffer clnt_wr = attachment.getClntWr();
-
-			String response = new String(Common.transferData(clnt_wr),
-					Charset.forName("UTF-8"));
+			
+			 String response = new String(Common.transferData(clnt_wr),
+			 Charset.forName("UTF-8"));
+			 
+			 System.out.println(response);
+			 
 			String adminOptions = "HISTOGRAM\nL33T\nROTATION\nSETSERVER\n.\n";
 
 			response = response.replace(".", adminOptions);
@@ -245,7 +272,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		System.out.println("Estoy en el metodo CAPA");
 		String response = "+OK\nCAPA \n";
 
-		if (!attachment.isLogged()) {
+		if (!attachment.usrProvided()) {
 			response = response + "USER\nPASS\nQUIT\n";
 			System.out.println(response.getBytes().length);
 
@@ -263,6 +290,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			serverbuf.put(clntRd);
 			clntRd.clear();
 
+			//The proxy will be expecting the response from the capa command
+			flags.setCapa(true);
+
 		}
 	}
 
@@ -271,7 +301,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		String statusCode;
 
-		if (!(attachment.isAdmin() && attachment.isLogged())) {
+		if (!attachment.isAdmin()) {
 			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
 		} else {
 			if (params.get(1).equalsIgnoreCase("ON")) {
@@ -297,6 +327,11 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
+
+		//The proxy will be expecting the response from the pass command
+		if (params.get(0).equalsIgnoreCase("pass")) {
+			flags.setPass(true);
+		}
 
 		System.out.println("Comando "
 				+ new String(Common.transferData(clnt_rd), Charset
@@ -343,16 +378,15 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private void setRotation(boolean rotation) {
 		this.rotation = rotation;
 	}
-	
-	
-	//SETSERVER username originserver
-	private void setServer(List<String> params, ProxyAtt attachment){
-		
+
+	// SETSERVER username originserver
+	private void setServer(List<String> params, ProxyAtt attachment) {
+
 		String statusCode;
-		
-		if(!(attachment.isAdmin() && attachment.isLogged())){
-			
+
+		if (!attachment.isAdmin()) {
+
 		}
-		
+
 	}
 }
