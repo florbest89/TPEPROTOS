@@ -5,6 +5,7 @@ public class ProxyCalls {
 	private boolean welcome;
 	private boolean pass;
 	private boolean capa;
+	private boolean email;
 	
 	public ProxyCalls(){}
 	
@@ -30,6 +31,14 @@ public class ProxyCalls {
 	
 	public boolean getCapa(){
 		return capa;
+	}
+
+	public boolean isEmail() {
+		return email;
+	}
+
+	public void setEmail(boolean email) {
+		this.email = email;
 	}
 	
 	

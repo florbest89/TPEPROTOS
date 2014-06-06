@@ -98,6 +98,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				case ROTATION:
 					rotation(request.getParams(), attachment);
 					break;
+				case SETSERVER:
+					setServer(request.getParams(),attachment);
+					break;
 				case ETC:
 					etc(request.getParams(), attachment);
 					break;
@@ -105,7 +108,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				}
 			}
 		} else {
-			
+
 			buf = attachment.getServerRd();
 			bytesRead = channel.read(buf);
 
@@ -116,16 +119,15 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				ResponseObject respOb = respParser.parse(buf);
 
 				if (flags.getWelcome()) {
-					
+
 					flags.setWelcome(false);
-					
+
 				} else {
 
 					buf.flip();
 					ByteBuffer clnt_wr = attachment.getClntWr();
 					clnt_wr.put(buf);
-					
-					
+
 					// Reading the status code for the PASS command
 					if (flags.getPass()) {
 						if (respOb.getStatusCode().equals("+OK")) {
@@ -190,48 +192,63 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		if (params.size() > 1) {
 
-			// El param[0] es el comando USER
-			String username = params.get(1);
-			attachment.setUsrProv(true);
-			String serverAddr = usersServers.get(username);
+			if (attachment.usrProvided()) {
+				
+				ByteBuffer clnt_rd = attachment.getClntRd();
+				
+				clnt_rd.flip();
+				attachment.getServerWr().put(clnt_rd);
+				clnt_rd.clear();
+				
+			} else {
 
-			if (serverAddr == null) {
-				serverAddr = defaultServer;
-			}
+				// El param[0] es el comando USER
+				String username = params.get(1);
+				attachment.setUsrProv(true);
+				String serverAddr = usersServers.get(username);
 
-			System.out.println("el username es " + username
-					+ " y es administrador? " + username.equals(admin));
-
-			if (username.equals(admin)) {
-				attachment.setAdmin(true);
-			}
-
-			ByteBuffer server = attachment.getServerWr();
-			ByteBuffer clnt = attachment.getClntRd();
-			// Pongo lo que escribio el cliente en lo que le pido al servidor
-
-			clnt.flip();
-
-			server.put(clnt);
-
-			clnt.clear();
-
-			// Create a new SocketChannel for the origin server
-			SocketChannel channel = SocketChannel.open();
-			// Initiate connection to server and repeatedly poll until complete
-			if (!channel.connect(new InetSocketAddress(serverAddr, port))) {
-				while (!channel.finishConnect()) {
-					System.out.print("."); // Do something else
+				if (serverAddr == null) {
+					serverAddr = defaultServer;
 				}
+
+				System.out.println("el username es " + username
+						+ " y es administrador? " + username.equals(admin));
+
+				if (username.equals(admin)) {
+					attachment.setAdmin(true);
+				}
+
+				ByteBuffer server = attachment.getServerWr();
+				ByteBuffer clnt = attachment.getClntRd();
+				// Pongo lo que escribio el cliente en lo que le pido al
+				// servidor
+
+				clnt.flip();
+
+				server.put(clnt);
+
+				clnt.clear();
+
+				// Create a new SocketChannel for the origin server
+				SocketChannel channel = SocketChannel.open();
+				// Initiate connection to server and repeatedly poll until
+				// complete
+				if (!channel.connect(new InetSocketAddress(serverAddr, port))) {
+					while (!channel.finishConnect()) {
+						System.out.print("."); // Do something else
+					}
+				}
+				channel.configureBlocking(false);
+
+				// I register a new key with the same ProxyAtt but with
+				// non-client
+				// state
+				channel.register(key.selector(), SelectionKey.OP_READ,
+						attachment);
+				// The proxy will be expecting the welcome message
+				flags.setWelcome(true);
+
 			}
-			channel.configureBlocking(false);
-
-			// I register a new key with the same ProxyAtt but with non-client
-			// state
-			channel.register(key.selector(), SelectionKey.OP_READ, attachment);
-			//The proxy will be expecting the welcome message
-			flags.setWelcome(true);
-
 		} else {
 			ByteBuffer clnt_wr = attachment.getClntWr();
 			String response = "-ERR[USRNEEDED] need to provide a user.\n";
@@ -241,6 +258,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	}
 
+	
+	//Chequear por que motivo me aparece una T demas
 	private void capaResp(ProxyAtt attachment) {
 
 		ByteBuffer clnt_wr = attachment.getClntWr();
@@ -249,12 +268,11 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 			System.out.println("user es administrador");
 
-			
-			 String response = new String(Common.transferData(clnt_wr),
-			 Charset.forName("UTF-8"));
-			 
-			 System.out.println(response);
-			 
+			String response = new String(Common.transferData(clnt_wr),
+					Charset.forName("UTF-8"));
+
+			System.out.println(response);
+
 			String adminOptions = "HISTOGRAM\nL33T\nROTATION\nSETSERVER\n.\n";
 
 			response = response.replace(".", adminOptions);
@@ -290,7 +308,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			serverbuf.put(clntRd);
 			clntRd.clear();
 
-			//The proxy will be expecting the response from the capa command
+			// The proxy will be expecting the response from the capa command
 			flags.setCapa(true);
 
 		}
@@ -328,7 +346,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
 
-		//The proxy will be expecting the response from the pass command
+		// The proxy will be expecting the response from the pass command
 		if (params.get(0).equalsIgnoreCase("pass")) {
 			flags.setPass(true);
 		}
@@ -356,11 +374,11 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
 		} else {
 			if (params.get(1).equalsIgnoreCase("ON")) {
-				statusCode = "+OK rotation transformation on. \n";
+				statusCode = "+OK Rotation transformation on. \n";
 				setRotation(true);
 			} else {
 				if (params.get(1).equalsIgnoreCase("OFF")) {
-					statusCode = "+OK rotation transformation off. \n";
+					statusCode = "+OK Rotation transformation off. \n";
 					setRotation(false);
 				} else {
 					statusCode = "-ERR[INVALID] Invalid parameters. \n";
@@ -370,7 +388,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 
 		ByteBuffer buf = attachment.getClntWr();
-		buf.flip();
 		buf.put(statusCode.getBytes());
 
 	}
@@ -385,8 +402,18 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		String statusCode;
 
 		if (!attachment.isAdmin()) {
-
+			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
+		} else {
+			if(params.size() == 3){
+				usersServers.put(params.get(1), params.get(2));
+				statusCode = "+OK Settings changed";
+			} else {
+				statusCode = "-ERR[INVALID] Invalid parameters";
+			}
 		}
+		
+		ByteBuffer clnt_wr = attachment.getClntWr();
+		clnt_wr.put(statusCode.getBytes());
 
 	}
 }
