@@ -99,7 +99,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 					rotation(request.getParams(), attachment);
 					break;
 				case SETSERVER:
-					setServer(request.getParams(),attachment);
+					setServer(request.getParams(), attachment);
 					break;
 				case ETC:
 					etc(request.getParams(), attachment);
@@ -118,27 +118,40 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			} else {
 				ResponseObject respOb = respParser.parse(buf);
 
-				if (flags.getWelcome()) {
-
-					flags.setWelcome(false);
+				if (flags.isEmail()) {
 
 				} else {
 
-					buf.flip();
-					ByteBuffer clnt_wr = attachment.getClntWr();
-					clnt_wr.put(buf);
-
-					// Reading the status code for the PASS command
-					if (flags.getPass()) {
-						if (respOb.getStatusCode().equals("+OK")) {
-							attachment.setLogState(true);
-						}
-						flags.setPass(false);
+					if (flags.isWelcome()) {
+						flags.setWelcome(false);
 					} else {
-						// Reading the status code for the CAPA command
-						if (flags.getCapa()) {
-							capaResp(attachment);
-							flags.setCapa(false);
+
+						buf.flip();
+						ByteBuffer clnt_wr = attachment.getClntWr();
+						clnt_wr.put(buf);
+
+						// Reading the status code for the PASS command
+						if (flags.isPass()) {
+							if (respOb.getStatusCode().equals("+OK")) {
+								attachment.setLogState(true);
+							}
+							flags.setPass(false);
+						} else {
+							// Reading the status code for the CAPA command
+							if (flags.isCapa()) {
+								capaResp(attachment);
+								flags.setCapa(false);
+							} else {
+								if (flags.isEmail()) {
+									
+									processEmail(attachment);
+									
+									buf.clear();
+									key.interestOps(SelectionKey.OP_READ);
+									
+									return;
+								}
+							}
 						}
 					}
 				}
@@ -193,13 +206,13 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		if (params.size() > 1) {
 
 			if (attachment.usrProvided()) {
-				
+
 				ByteBuffer clnt_rd = attachment.getClntRd();
-				
+
 				clnt_rd.flip();
 				attachment.getServerWr().put(clnt_rd);
 				clnt_rd.clear();
-				
+
 			} else {
 
 				// El param[0] es el comando USER
@@ -258,8 +271,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	}
 
-	
-	//Chequear por que motivo me aparece una T demas
+	// Chequear por que motivo me aparece una T demas
 	private void capaResp(ProxyAtt attachment) {
 
 		ByteBuffer clnt_wr = attachment.getClntWr();
@@ -404,16 +416,20 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		if (!attachment.isAdmin()) {
 			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
 		} else {
-			if(params.size() == 3){
+			if (params.size() == 3) {
 				usersServers.put(params.get(1), params.get(2));
 				statusCode = "+OK Settings changed";
 			} else {
 				statusCode = "-ERR[INVALID] Invalid parameters";
 			}
 		}
-		
+
 		ByteBuffer clnt_wr = attachment.getClntWr();
 		clnt_wr.put(statusCode.getBytes());
 
+	}
+	
+	private void processEmail(ProxyAtt attachment){
+		
 	}
 }
