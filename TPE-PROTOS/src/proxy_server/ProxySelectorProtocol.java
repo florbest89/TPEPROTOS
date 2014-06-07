@@ -89,6 +89,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				case USER:
 					logUser(request.getParams(), attachment, key);
 					break;
+				case TOP:
+					top(request.getParams(), attachment);
+					break;
 				case CAPA:
 					capaReq(request.getParams(), attachment);
 					break;
@@ -116,43 +119,36 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			if (bytesRead == -1) {
 				channel.close();
 			} else {
+				
 				ResponseObject respOb = respParser.parse(buf);
 
-				if (flags.isEmail()) {
-
+				if (flags.isWelcome()) {
+					flags.setWelcome(false);
 				} else {
+					
+					if (flags.isEmail()) {
+						processEmail(attachment);
+						key.interestOps(SelectionKey.OP_READ);
+						return;
+					}
 
-					if (flags.isWelcome()) {
-						flags.setWelcome(false);
-					} else {
+					buf.flip();
+					ByteBuffer clnt_wr = attachment.getClntWr();
+					clnt_wr.put(buf);
 
-						buf.flip();
-						ByteBuffer clnt_wr = attachment.getClntWr();
-						clnt_wr.put(buf);
-
-						// Reading the status code for the PASS command
-						if (flags.isPass()) {
-							if (respOb.getStatusCode().equals("+OK")) {
-								attachment.setLogState(true);
-							}
-							flags.setPass(false);
-						} else {
-							// Reading the status code for the CAPA command
-							if (flags.isCapa()) {
-								capaResp(attachment);
-								flags.setCapa(false);
-							} else {
-								if (flags.isEmail()) {
-									
-									processEmail(attachment);
-									
-									buf.clear();
-									key.interestOps(SelectionKey.OP_READ);
-									
-									return;
-								}
-							}
+					// Reading the status code for the PASS command
+					if (flags.isPass()) {
+						if (respOb.getStatusCode().equals("+OK")) {
+							attachment.setLogState(true);
 						}
+						flags.setPass(false);
+					} else {
+						// Reading the status code for the CAPA command
+						if (flags.isCapa()) {
+							capaResp(attachment);
+							flags.setCapa(false);
+						}
+
 					}
 				}
 
@@ -162,6 +158,20 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		buf.clear();
 		key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+
+	}
+
+	private void processEmail(ProxyAtt attachment) {
+		// TODO Auto-generated method stub
+		/*
+		 * Deberia tener un metodo que sea para parsear el mail y que reciba un
+		 * bytebuffer (el server read) y l33t y rotation para ir haciendo los
+		 * cambios necesarios =)
+		 * 
+		 * Primero igual, que analice si el statuscode es -ERR porque siendo ese
+		 * el caso me ahorro mucho. Si ese es el caso, cambio el flag del mail a
+		 * false.
+		 */
 
 	}
 
@@ -428,8 +438,16 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		clnt_wr.put(statusCode.getBytes());
 
 	}
-	
-	private void processEmail(ProxyAtt attachment){
-		
+
+	private void top(List<String> params, ProxyAtt attachment) {
+
+		flags.setEmail(true);
+
+		ByteBuffer srv_wr = attachment.getServerWr();
+		ByteBuffer clnt_rd = attachment.getClntRd();
+
+		clnt_rd.flip();
+		srv_wr.put(clnt_rd);
+
 	}
 }
