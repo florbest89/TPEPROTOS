@@ -21,15 +21,15 @@ public class ProxyCalls {
 		this.capa = capa;
 	}
 	
-	public boolean getWelcome(){
+	public boolean isWelcome(){
 		return welcome;
 	}
 	
-	public boolean getPass(){
+	public boolean isPass(){
 		return pass;
 	}
 	
-	public boolean getCapa(){
+	public boolean isCapa(){
 		return capa;
 	}
 
