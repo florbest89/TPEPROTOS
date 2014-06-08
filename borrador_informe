@@ -1,0 +1,61 @@
+Borrador del informe
+
+PROTOCOLO DE MONITOREO:
+Hecho sobre POP3. Los comandos son:
+•	HISTOGRAM
+•	STATS
+•	SETSERVER username originserver
+•	L33T ON/OFF
+•	ROTATION ON/OFF
+
+Los primeros 2 son de la capa MONITOR, las restantes de la capa SETTINGS.
+Definición en base a la RFC:
+Capa tag:
+MONITOR
+Arguments:
+None
+Added commands:
+HISTOGRAM, STATS
+Standard commands affected:
+None
+Commands valid in states:
+TRANSACTION
+
+Comandos:
+HISTOGRAM
+Arguments: none
+Restrictions: may only be given in the TRANSACTION state
+Discussion: Gives to the admin user a histogram of the status codes. If
+the user isn’t admin, the response is: -ERR[NOTADMIN] Only admin can see the histogram
+Possible Responses:
+
++OK Histogram of status codes up to date
+Status code: +OK | times: 20
+Status code: -ERR[NOT ADMIN] | times: 10
+Status code: -ERR[INVALID] | times: 5
+Status code: -ERR[USRNOTPROV] | times: 2
+STATS
+Arguments: none
+Restrictions: may only be given in the TRANSACTION state
+Discussion: Gives to the admin user a view of the stats the server recollected. If
+the user isn’t admin, the response is: -ERR[NOTADMIN] Only admin can see the stats
+Possible Responses:
+
++OK The proxy server stats as follows
+# Bytes transferred: 24839024
+# Acceses: 3
+# +OK : 354
+# -ERR: 200
+
+------------
+Limitaciones:
+Al ser simple thread si un usuario decidiera leer un 
+correo que posea un tamaño extenso la performance decaería.
+
+Stats:
+
+private long bytestransferred;
+private long accesses;
+private long okstats;
+private errstats;
+
