@@ -1,5 +1,7 @@
 package proxy_server;
 
+
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -49,6 +51,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		stats = new ProxyStats();
 	}
 
+	@Override
 	public void handleAccept(SelectionKey key) throws IOException {
 		SocketChannel clntChan = ((ServerSocketChannel) key.channel()).accept();
 		clntChan.configureBlocking(false); // Must be nonblocking to register
@@ -64,6 +67,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		clntChan.register(key.selector(), SelectionKey.OP_WRITE, attachment);
 	}
 
+	@Override
 	public void handleRead(SelectionKey key) throws IOException {
 
 		// Client socket channel has pending data
@@ -91,8 +95,12 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			} else {
 
 				RequestObject request = reqParser.parse(buf);
+				System.out.println(request.getCommand());
 
 				switch (request.getType()) {
+				case AUTH:
+					auth(attachment);
+					break;
 				case USER:
 					logUser(request.getParams(), attachment, key);
 					break;
@@ -142,8 +150,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			} else {
 
 				ResponseObject respOb = respParser.parse(buf);
-				
-				System.out.println(respOb.getStatusCode() + " " + respOb.getBody());
+
+				System.out.println(respOb.getStatusCode() + " "
+						+ respOb.getBody());
 
 				if (calls.isWelcome()) {
 					calls.setWelcome(false);
@@ -201,6 +210,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	}
 
 	// Aca hay que hacer que el proxy maneje y devuelva el response del server
+	@Override
 	public void handleWrite(SelectionKey key) throws IOException {
 		/*
 		 * Channel is available for writing, and key is valid (i.e., client
@@ -237,12 +247,20 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		buf.clear(); // Clear buffer
 
 		if (attachment.getCalls().alreadyQuited()) {
-			System.out.println("EStoy saliendooo");
 			key.channel().close();
 			key.interestOps(SelectionKey.OP_READ);
 		} else {
 			key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 		}
+	}
+
+	private void auth(ProxyAtt attachment) {
+
+		ByteBuffer clnt_wr = attachment.getClntWr();
+		String response = "-ERR[INVALID] Command AUTH is not supported.\r\n";
+
+		stats.addInvalid();
+		clnt_wr.put(response.getBytes());
 	}
 
 	private void logUser(List<String> params, ProxyAtt attachment,
@@ -342,7 +360,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 			System.out.println(response);
 
-			String adminOptions = "STATS\nHISTOGRAM\nL33T\nROTATION\nSETSERVER\n.\r\n";
+			String adminOptions = "MONITOR\nSETTINGS\nSETSERVER\n.\r\n";
 
 			response = response.replace(".", adminOptions);
 
@@ -464,6 +482,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			attachment.getCalls().setPass(true);
 		}
 
+		System.out.println("estoy en etc");
 		System.out.println("Comando "
 				+ new String(Common.transferData(clnt_rd), Charset
 						.forName("UTF-8")));
@@ -547,8 +566,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	// msg: number of message to retrieve
 	// n: number of lines from body to retrieve
 	private void top(List<String> params, ProxyAtt attachment) {
-		
-		
 
 		attachment.getCalls().setEmail(true);
 
@@ -622,4 +639,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		 */
 
 	}
+
+	
 }

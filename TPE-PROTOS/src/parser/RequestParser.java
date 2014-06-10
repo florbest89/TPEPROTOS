@@ -48,7 +48,12 @@ public class RequestParser {
 											if(cmd.equalsIgnoreCase("QUIT")){
 												reqOb.setType(RequestType.QUIT);
 											}else {
-												reqOb.setType(RequestType.ETC);												
+												if(cmd.toLowerCase().contains("AUTH")){
+													reqOb.setType(RequestType.AUTH);
+													
+												} else{													
+													reqOb.setType(RequestType.ETC);												
+												}
 											}
 										}
 									}
