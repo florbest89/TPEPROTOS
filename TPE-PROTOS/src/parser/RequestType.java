@@ -1,6 +1,6 @@
 package parser;
 
 public enum RequestType {
-	USER, HISTOGRAM , L33T, ROTATION, CAPA, SETSERVER, TOP,  QUIT, ETC; 
+	USER, HISTOGRAM , STATS,  L33T, ROTATION, CAPA, SETSERVER, TOP, RETR, ETC, QUIT; 
 	
 }

@@ -4,20 +4,18 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 public class RequestParser {
-	
-	
+
 	public RequestObject parse(ByteBuffer buffer) {
 
-		
-		String request = new String(Common.transferData(buffer),Charset.forName("UTF-8"));
-		
-		request = request.substring(0, request.indexOf('\n'));
-		String[] params = request.split(" ");		
+		String request = new String(Common.transferData(buffer),
+				Charset.forName("UTF-8"));
 
-		
+		request = request.substring(0, request.indexOf('\n'));
+		String[] params = request.split(" ");
+
 		RequestObject reqOb = new RequestObject();
 		String cmd = params[0];
-		
+
 		System.out.println(cmd);
 
 		if (cmd.equalsIgnoreCase("USER")) {
@@ -29,22 +27,30 @@ public class RequestParser {
 				if (cmd.equalsIgnoreCase("TOP")) {
 					reqOb.setType(RequestType.TOP);
 				} else {
-					if (cmd.equalsIgnoreCase("HISTOGRAM")) {
-						reqOb.setType(RequestType.HISTOGRAM);
+					if (cmd.equalsIgnoreCase("RETR")) {
+						reqOb.setType(RequestType.RETR);
 					} else {
-						if (cmd.equalsIgnoreCase("L33T")) {
-							reqOb.setType(RequestType.L33T);
+						if (cmd.equalsIgnoreCase("HISTOGRAM")) {
+							reqOb.setType(RequestType.HISTOGRAM);
 						} else {
-							if (cmd.equalsIgnoreCase("ROTATION")) {
-								reqOb.setType(RequestType.ROTATION);
+							if (cmd.equalsIgnoreCase("STATS")) {
+								reqOb.setType(RequestType.STATS);
 							} else {
-								if (cmd.equalsIgnoreCase("SETSERVER")) {
-									reqOb.setType(RequestType.SETSERVER);
+								if (cmd.equalsIgnoreCase("L33T")) {
+									reqOb.setType(RequestType.L33T);
 								} else {
-									if (cmd.equalsIgnoreCase("QUIT")) {
-										reqOb.setType(RequestType.QUIT);
+									if (cmd.equalsIgnoreCase("ROTATION")) {
+										reqOb.setType(RequestType.ROTATION);
 									} else {
-										reqOb.setType(RequestType.ETC);
+										if (cmd.equalsIgnoreCase("SETSERVER")) {
+											reqOb.setType(RequestType.SETSERVER);
+										} else {
+											if(cmd.equalsIgnoreCase("QUIT")){
+												reqOb.setType(RequestType.QUIT);
+											}else {
+												reqOb.setType(RequestType.ETC);												
+											}
+										}
 									}
 								}
 							}

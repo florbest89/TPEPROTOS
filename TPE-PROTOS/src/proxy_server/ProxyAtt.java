@@ -21,6 +21,8 @@ public class ProxyAtt {
 	private boolean usr_prov;
 	//Client SocketChannel
 	private SocketChannel clntChannel;
+	//Session flags
+	private SessionCalls calls;
 	
 	public ProxyAtt(int bufSize,SocketChannel clntChannel){
 		clnt_rd = ByteBuffer.allocate(bufSize);
@@ -30,7 +32,9 @@ public class ProxyAtt {
 		logged = false;
 		admin = false;
 		usr_prov = false;
+		calls = new SessionCalls();
 		this.clntChannel = clntChannel;
+		
 	}
 	
 	
@@ -76,6 +80,10 @@ public class ProxyAtt {
 	
 	public boolean usrProvided(){
 		return usr_prov;
+	}
+	
+	public SessionCalls getCalls(){
+		return calls;
 	}
 	
 	

@@ -20,18 +20,24 @@ import parser.ResponseParser;
 
 public class ProxySelectorProtocol implements TCPProtocol {
 
-	private int bufSize; // Size of I/O buffer
+	private int bufSize; // Size of buffers
 	private Map<String, String> usersServers = new HashMap<String, String>();
-	private RequestParser reqParser = new RequestParser();
-	private ResponseParser respParser = new ResponseParser();
+	private int port = 110;
+	// The proxy welcome message
+	private String welcome_msg = "+OK PDC02-Proxy ready.\r\n";
+	// The proxy goodbye message
+	private String goodbye_msg = "+OK PDC02-Proxy says goodbye.\r\n";
 	private String defaultServer = "localhost";
 	// admin = admin@protos.com
 	private String admin = "florcha@domain2.com";
-	// The proxy welcome message
-	private String welcome_msg = "+OK PDC02-Proxy ready.\n";
-	private int port = 110;
-	// Flags
-	private ProxyCalls flags;
+
+	// Proxy stats for monitoring
+	private ProxyStats stats;
+
+	// Parsers
+	private RequestParser reqParser = new RequestParser();
+	private ResponseParser respParser = new ResponseParser();
+
 	// Transformation settings
 	private boolean l33t;
 	private boolean rotation;
@@ -40,8 +46,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		this.bufSize = bufSize;
 		l33t = false;
 		rotation = false;
-		flags = new ProxyCalls();
-
+		stats = new ProxyStats();
 	}
 
 	public void handleAccept(SelectionKey key) throws IOException {
@@ -53,31 +58,33 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		ProxyAtt attachment = new ProxyAtt(bufSize, clntChan);
 
 		attachment.getClntWr().put(welcome_msg.getBytes());
+		stats.addAccess();
+		stats.addOkCode();
 
 		clntChan.register(key.selector(), SelectionKey.OP_WRITE, attachment);
 	}
 
-	// Aca hay que hacer que el parser lea el request del cliente
 	public void handleRead(SelectionKey key) throws IOException {
 
 		// Client socket channel has pending data
 		SocketChannel channel = (SocketChannel) key.channel();
 
 		ProxyAtt attachment = (ProxyAtt) key.attachment();
+		SessionCalls calls = attachment.getCalls();
 		ByteBuffer buf;
+		ByteBuffer writer;
 
 		long bytesRead;
 
 		// See if this channel belongs to the client
 		if (attachment.isClient(channel)) {
 
-			buf = attachment.getClntRd();
-			bytesRead = channel.read(buf);
+			stats.addAccess();
 
-			/*
-			 * System.out.println("Estoy leyendo del cliente: " + new
-			 * String(Common.transferData(buf)));
-			 */
+			buf = attachment.getClntRd();
+			writer = attachment.getClntWr();
+
+			bytesRead = channel.read(buf);
 
 			if (bytesRead == -1) {
 				channel.close();
@@ -92,6 +99,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				case TOP:
 					top(request.getParams(), attachment);
 					break;
+				case RETR:
+					retr(request.getParams(), attachment);
+					break;
 				case CAPA:
 					capaReq(request.getParams(), attachment);
 					break;
@@ -104,6 +114,15 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				case SETSERVER:
 					setServer(request.getParams(), attachment);
 					break;
+				case HISTOGRAM:
+					histogram(request.getParams(), attachment);
+					break;
+				case STATS:
+					stats(request.getParams(), attachment);
+					break;
+				case QUIT:
+					quit(request.getParams(), attachment);
+					break;
 				case ETC:
 					etc(request.getParams(), attachment);
 					break;
@@ -113,20 +132,35 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		} else {
 
 			buf = attachment.getServerRd();
+			writer = attachment.getServerWr();
+
 			bytesRead = channel.read(buf);
 
 			// The other end closed
 			if (bytesRead == -1) {
 				channel.close();
 			} else {
-				
-				ResponseObject respOb = respParser.parse(buf);
 
-				if (flags.isWelcome()) {
-					flags.setWelcome(false);
+				ResponseObject respOb = respParser.parse(buf);
+				
+				System.out.println(respOb.getStatusCode() + " " + respOb.getBody());
+
+				if (calls.isWelcome()) {
+					calls.setWelcome(false);
 				} else {
-					
-					if (flags.isEmail()) {
+
+					if (respOb.getStatusCode().toUpperCase().contains("+OK")) {
+						stats.addOkCode();
+					} else {
+						stats.addErrCode();
+					}
+
+					if (calls.isQuiting()) {
+						clntQuits(attachment);
+						buf.clear();
+					}
+
+					if (calls.isEmail()) {
 						processEmail(attachment);
 						key.interestOps(SelectionKey.OP_READ);
 						return;
@@ -137,16 +171,16 @@ public class ProxySelectorProtocol implements TCPProtocol {
 					clnt_wr.put(buf);
 
 					// Reading the status code for the PASS command
-					if (flags.isPass()) {
+					if (calls.isPass()) {
 						if (respOb.getStatusCode().equals("+OK")) {
 							attachment.setLogState(true);
 						}
-						flags.setPass(false);
+						calls.setPass(false);
 					} else {
 						// Reading the status code for the CAPA command
-						if (flags.isCapa()) {
+						if (calls.isCapa()) {
 							capaResp(attachment);
-							flags.setCapa(false);
+							calls.setCapa(false);
 						}
 
 					}
@@ -157,21 +191,12 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 
 		buf.clear();
-		key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 
-	}
-
-	private void processEmail(ProxyAtt attachment) {
-		// TODO Auto-generated method stub
-		/*
-		 * Deberia tener un metodo que sea para parsear el mail y que reciba un
-		 * bytebuffer (el server read) y l33t y rotation para ir haciendo los
-		 * cambios necesarios =)
-		 * 
-		 * Primero igual, que analice si el statuscode es -ERR porque siendo ese
-		 * el caso me ahorro mucho. Si ese es el caso, cambio el flag del mail a
-		 * false.
-		 */
+		if (writer.position() != 0) {
+			key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+		} else {
+			key.interestOps(SelectionKey.OP_READ);
+		}
 
 	}
 
@@ -184,6 +209,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		// Retrieve data read earlier
 
 		ProxyAtt attachment = (ProxyAtt) key.attachment();
+		long bytesTransferred;
 
 		ByteBuffer buf;
 		SocketChannel channel = (SocketChannel) key.channel();
@@ -199,7 +225,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 
 		buf.flip(); // Prepare buffer for writing
-		channel.write(buf);
+		bytesTransferred = channel.write(buf);
+
+		stats.addBytesTransf(bytesTransferred);
 
 		if (!buf.hasRemaining()) { // Buffer completely written?
 			// Nothing left, so no longer interested in writes
@@ -207,7 +235,14 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 
 		buf.clear(); // Clear buffer
-		key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+
+		if (attachment.getCalls().alreadyQuited()) {
+			System.out.println("EStoy saliendooo");
+			key.channel().close();
+			key.interestOps(SelectionKey.OP_READ);
+		} else {
+			key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+		}
 	}
 
 	private void logUser(List<String> params, ProxyAtt attachment,
@@ -269,15 +304,27 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				channel.register(key.selector(), SelectionKey.OP_READ,
 						attachment);
 				// The proxy will be expecting the welcome message
-				flags.setWelcome(true);
+				attachment.getCalls().setWelcome(true);
 
 			}
 		} else {
 			ByteBuffer clnt_wr = attachment.getClntWr();
-			String response = "-ERR[USRNEEDED] need to provide a user.\n";
-
+			String response = "-ERR[USRNEEDED] need to provide a user.\r\n";
 			clnt_wr.put(response.getBytes());
+			stats.addUsrNeeded();
 		}
+
+	}
+
+	private void clntQuits(ProxyAtt attachment) {
+
+		ByteBuffer clnt_wr = attachment.getClntWr();
+		SessionCalls calls = attachment.getCalls();
+
+		clnt_wr.put(goodbye_msg.getBytes());
+
+		calls.setQuit(false);
+		calls.setAlreadyQuit(true);
 
 	}
 
@@ -295,7 +342,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 			System.out.println(response);
 
-			String adminOptions = "HISTOGRAM\nL33T\nROTATION\nSETSERVER\n.\n";
+			String adminOptions = "STATS\nHISTOGRAM\nL33T\nROTATION\nSETSERVER\n.\r\n";
 
 			response = response.replace(".", adminOptions);
 
@@ -313,13 +360,15 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		String response = "+OK\nCAPA \n";
 
 		if (!attachment.usrProvided()) {
-			response = response + "USER\nPASS\nQUIT\n";
+			response = response + "USER\nPASS\nQUIT\r\n";
 			System.out.println(response.getBytes().length);
 
 			ByteBuffer buf = attachment.getClntWr();
 
 			// Put in the buffer the response from the CAPA command
 			buf.put(response.getBytes());
+
+			stats.addOkCode();
 
 		} else {
 
@@ -331,35 +380,75 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			clntRd.clear();
 
 			// The proxy will be expecting the response from the capa command
-			flags.setCapa(true);
+			attachment.getCalls().setCapa(true);
 
 		}
 	}
 
-	// agregar el log
 	private void l33t(List<String> params, ProxyAtt attachment) {
 
-		String statusCode;
+		String statusCode = "";
 
-		if (!attachment.isAdmin()) {
-			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
+		// If the request doesn't have 2 parameters OR the 2nd parameter isn't
+		// ON or OFF the request is invalid
+		if (params.size() != 2
+				|| (!(params.get(1).equalsIgnoreCase("ON") && !(params.get(1)
+						.equalsIgnoreCase("OFF"))))) {
+			statusCode = "-ERR[INVALID] Invalid parameters. \r\n";
+			stats.addInvalid();
 		} else {
-			if (params.get(1).equalsIgnoreCase("ON")) {
-				statusCode = "+OK l33t transformation on. \n";
-				setl33t(true);
+
+			if (!attachment.isAdmin()) {
+				statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \r\n";
+				stats.addNotAdmin();
 			} else {
-				if (params.get(1).equalsIgnoreCase("OFF")) {
-					statusCode = "+OK l33t transformation off. \n";
-					setl33t(false);
+				stats.addOkCode();
+				if (params.get(1).equalsIgnoreCase("ON")) {
+					statusCode = "+OK l33t transformation on. \r\n";
+					setl33t(true);
 				} else {
-					statusCode = "-ERR[INVALID] Invalid parameters. \n";
+					if (params.get(1).equalsIgnoreCase("OFF")) {
+						statusCode = "+OK l33t transformation off. \r\n";
+						setl33t(false);
+					}
+
 				}
 			}
-
 		}
 
 		ByteBuffer buf = attachment.getClntWr();
 		buf.put(statusCode.getBytes());
+
+	}
+
+	private void quit(List<String> params, ProxyAtt attachment) {
+
+		String statusCode = "";
+		ByteBuffer writer;
+		SessionCalls calls = attachment.getCalls();
+
+		if (!attachment.usrProvided()) {
+
+			writer = attachment.getClntWr();
+
+			if (params.size() != 1) {
+				statusCode = "-ERR[INVALID] Invalid parameters. \r\n";
+				stats.addInvalid();
+			} else {
+				statusCode = goodbye_msg;
+				stats.addOkCode();
+			}
+			calls.setAlreadyQuit(true);
+
+		} else {
+			writer = attachment.getServerWr();
+			ByteBuffer reader = attachment.getClntRd();
+
+			reader.flip();
+			writer.put(reader);
+			calls.setQuit(true);
+
+		}
 
 	}
 
@@ -368,9 +457,11 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
 
+		String cmd = params.get(0);
+
 		// The proxy will be expecting the response from the pass command
-		if (params.get(0).equalsIgnoreCase("pass")) {
-			flags.setPass(true);
+		if (cmd.equalsIgnoreCase("pass")) {
+			attachment.getCalls().setPass(true);
 		}
 
 		System.out.println("Comando "
@@ -390,23 +481,33 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	// agregar logs
 	private void rotation(List<String> params, ProxyAtt attachment) {
 
-		String statusCode;
+		String statusCode = "";
 
-		if (!(attachment.isAdmin() && attachment.isLogged())) {
-			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
+		// If the request doesn't have 2 parameters OR the 2nd parameter isn't
+		// ON or OFF the request is invalid
+		if (params.size() != 2
+				|| (!(params.get(1).equalsIgnoreCase("ON") && !(params.get(1)
+						.equalsIgnoreCase("OFF"))))) {
+			statusCode = "-ERR[INVALID] Invalid parameters. \r\n";
+			stats.addInvalid();
 		} else {
-			if (params.get(1).equalsIgnoreCase("ON")) {
-				statusCode = "+OK Rotation transformation on. \n";
-				setRotation(true);
+
+			if (!attachment.isAdmin()) {
+				statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings.\r\n";
+				stats.addNotAdmin();
 			} else {
-				if (params.get(1).equalsIgnoreCase("OFF")) {
-					statusCode = "+OK Rotation transformation off. \n";
-					setRotation(false);
+				stats.addOkCode();
+				if (params.get(1).equalsIgnoreCase("ON")) {
+					statusCode = "+OK Rotation transformation on. \r\n";
+					setRotation(true);
 				} else {
-					statusCode = "-ERR[INVALID] Invalid parameters. \n";
+					if (params.get(1).equalsIgnoreCase("OFF")) {
+						statusCode = "+OK Rotation transformation off. \r\n";
+						setRotation(false);
+					}
+
 				}
 			}
-
 		}
 
 		ByteBuffer buf = attachment.getClntWr();
@@ -424,13 +525,16 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		String statusCode;
 
 		if (!attachment.isAdmin()) {
-			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings. \n";
+			statusCode = "-ERR[NOT ADMIN] Only the administrator can change settings.\r\n";
+			stats.addNotAdmin();
 		} else {
 			if (params.size() == 3) {
 				usersServers.put(params.get(1), params.get(2));
-				statusCode = "+OK Settings changed";
+				statusCode = "+OK Settings changed \r\n";
+				stats.addOkCode();
 			} else {
-				statusCode = "-ERR[INVALID] Invalid parameters";
+				statusCode = "-ERR[INVALID] Invalid parameters\r\n";
+				stats.addInvalid();
 			}
 		}
 
@@ -439,15 +543,83 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	}
 
+	// TOP msg n
+	// msg: number of message to retrieve
+	// n: number of lines from body to retrieve
 	private void top(List<String> params, ProxyAtt attachment) {
+		
+		
 
-		flags.setEmail(true);
+		attachment.getCalls().setEmail(true);
 
 		ByteBuffer srv_wr = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
 
 		clnt_rd.flip();
 		srv_wr.put(clnt_rd);
+
+	}
+
+	// RETR msg
+	// retrieve the msg message
+	private void retr(List<String> params, ProxyAtt attachment) {
+
+	}
+
+	private void histogram(List<String> params, ProxyAtt attachment) {
+
+		String statusCode = "";
+
+		if (params.size() != 1) {
+			statusCode = "-ERR[INVALID] Invalid parameters\r\n";
+			stats.addInvalid();
+		} else {
+			if (!attachment.isAdmin()) {
+				statusCode = "-ERR[NOT ADMIN] Only the administrator can see the histogram. \r\n";
+				stats.addNotAdmin();
+			} else {
+				stats.addOkCode();
+				statusCode = "+OK The histogram is: \n" + stats.getHistogram();
+			}
+		}
+
+		ByteBuffer clnt_wr = attachment.getClntWr();
+		clnt_wr.put(statusCode.getBytes());
+
+	}
+
+	private void stats(List<String> params, ProxyAtt attachment) {
+
+		String statusCode = "";
+
+		if (params.size() != 1) {
+			statusCode = "-ERR[INVALID] Invalid parameters\r\n";
+			stats.addInvalid();
+		} else {
+			if (!attachment.isAdmin()) {
+				statusCode = "-ERR[NOT ADMIN] Only the administrator can see the stats. \r\n";
+				stats.addNotAdmin();
+			} else {
+				stats.addOkCode();
+				statusCode = "+OK The stats are: \n" + stats.getStats();
+			}
+		}
+
+		ByteBuffer clnt_wr = attachment.getClntWr();
+		clnt_wr.put(statusCode.getBytes());
+	}
+
+	private void processEmail(ProxyAtt attachment) {
+		// TODO Auto-generated method stub
+		/*
+		 * Deberia tener un metodo que sea para parsear el mail y que reciba un
+		 * bytebuffer (el server read) y l33t y rotation para ir haciendo los
+		 * cambios necesarios =)
+		 * 
+		 * Primero igual, que analice si el statuscode es -ERR porque siendo ese
+		 * el caso me ahorro mucho. Si ese es el caso, cambio el flag del mail a
+		 * false.
+		 */
 
 	}
 }
