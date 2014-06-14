@@ -7,7 +7,7 @@ public class ResponseParser {
 	
 	public ResponseObject parse(ByteBuffer buf){
 		
-		String response = new String(Common.transferData(buf),Charset.forName("UTF-8"));
+		String response = Common.transferData(buf);
 		String[] params;
 		String sep = " ";
 		

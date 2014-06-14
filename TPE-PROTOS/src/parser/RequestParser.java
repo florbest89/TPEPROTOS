@@ -7,8 +7,7 @@ public class RequestParser {
 
 	public RequestObject parse(ByteBuffer buffer) {
 
-		String request = new String(Common.transferData(buffer),
-				Charset.forName("UTF-8"));
+		String request = Common.transferData(buffer);
 
 		request = request.substring(0, request.indexOf('\n'));
 		String[] params = request.split(" ");

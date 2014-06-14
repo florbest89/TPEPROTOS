@@ -2,6 +2,8 @@ package proxy_server;
 
 
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -13,6 +15,7 @@ import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import parser.Common;
 import parser.RequestObject;
@@ -24,14 +27,19 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private int bufSize; // Size of buffers
 	private Map<String, String> usersServers = new HashMap<String, String>();
-	private int port = 110;
+	
+	//Proxy properties
+	private Properties prop;
+	
+	
+	private int port;
+	private String defaultServer;
+	private String admin ;
+	
 	// The proxy welcome message
-	private String welcome_msg = "+OK PDC02-Proxy ready.\r\n";
+	private String welcome_msg;
 	// The proxy goodbye message
-	private String goodbye_msg = "+OK PDC02-Proxy says goodbye.\r\n";
-	private String defaultServer = "localhost";
-	// admin = admin@protos.com
-	private String admin = "florcha@domain2.com";
+	private String goodbye_msg;
 
 	// Proxy stats for monitoring
 	private ProxyStats stats;
@@ -44,11 +52,26 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private boolean l33t;
 	private boolean rotation;
 
-	public ProxySelectorProtocol(int bufSize) {
+	public ProxySelectorProtocol(int bufSize) throws FileNotFoundException, IOException  {
 		this.bufSize = bufSize;
 		l33t = false;
 		rotation = false;
 		stats = new ProxyStats();
+		prop = new Properties();
+		
+		initialize();
+	}
+	
+	private void initialize() throws FileNotFoundException, IOException{
+		
+		prop.load(new FileInputStream("src/resources/proxy.properties"));
+		
+		welcome_msg = prop.getProperty("welcome_msg");
+		goodbye_msg = prop.getProperty("goodbye_msg");
+		port = Integer.valueOf(prop.getProperty("pop3-port"));
+		defaultServer = prop.getProperty("default-server");
+		admin = prop.getProperty("admin");		
+		
 	}
 
 	@Override
@@ -93,7 +116,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			if (bytesRead == -1) {
 				channel.close();
 			} else {
-
+				
 				RequestObject request = reqParser.parse(buf);
 				System.out.println(request.getCommand());
 
@@ -105,7 +128,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 					logUser(request.getParams(), attachment, key);
 					break;
 				case TOP:
-					top(request.getParams(), attachment);
+					retr(request.getParams(), attachment);
 					break;
 				case RETR:
 					retr(request.getParams(), attachment);
@@ -170,7 +193,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 					}
 
 					if (calls.isEmail()) {
-						processEmail(attachment);
+						//processEmail(attachment);
+						retrMsg(attachment);
 						key.interestOps(SelectionKey.OP_READ);
 						return;
 					}
@@ -327,42 +351,34 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			}
 		} else {
 			ByteBuffer clnt_wr = attachment.getClntWr();
-			String response = "-ERR[USRNEEDED] need to provide a user.\r\n";
+			String response = "-ERR[USRNEEDED] Need to provide a user.\r\n";
 			clnt_wr.put(response.getBytes());
 			stats.addUsrNeeded();
 		}
 
 	}
 
-	private void clntQuits(ProxyAtt attachment) {
 
-		ByteBuffer clnt_wr = attachment.getClntWr();
-		SessionCalls calls = attachment.getCalls();
-
-		clnt_wr.put(goodbye_msg.getBytes());
-
-		calls.setQuit(false);
-		calls.setAlreadyQuit(true);
-
-	}
-
-	// Chequear por que motivo me aparece una T demas
 	private void capaResp(ProxyAtt attachment) {
 
 		ByteBuffer clnt_wr = attachment.getClntWr();
 
+		System.out.println("Soy administrador? : " + attachment.isAdmin());
+		
+		
 		if (attachment.isAdmin()) {
 
 			System.out.println("user es administrador");
-
-			String response = new String(Common.transferData(clnt_wr),
-					Charset.forName("UTF-8"));
+			
+			String response = Common.transferData(clnt_wr);
 
 			System.out.println(response);
 
 			String adminOptions = "MONITOR\nSETTINGS\nSETSERVER\n.\r\n";
 
+			System.out.println(response);
 			response = response.replace(".", adminOptions);
+			System.out.println(response);
 
 			clnt_wr.clear();
 			clnt_wr.put(response.getBytes());
@@ -375,11 +391,10 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private void capaReq(List<String> params, ProxyAtt attachment) {
 
 		System.out.println("Estoy en el metodo CAPA");
-		String response = "+OK\nCAPA \n";
+		String response = "+OK\nCAPA\n";
 
 		if (!attachment.usrProvided()) {
-			response = response + "USER\nPASS\nQUIT\r\n";
-			System.out.println(response.getBytes().length);
+			response = response + "USER\nQUIT\r\n";
 
 			ByteBuffer buf = attachment.getClntWr();
 
@@ -455,8 +470,10 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			} else {
 				statusCode = goodbye_msg;
 				stats.addOkCode();
+				calls.setAlreadyQuit(true);
 			}
-			calls.setAlreadyQuit(true);
+			
+			writer.put(statusCode.getBytes());
 
 		} else {
 			writer = attachment.getServerWr();
@@ -469,27 +486,49 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 
 	}
+	
+	private void clntQuits(ProxyAtt attachment) {
+		
+		ByteBuffer clnt_wr = attachment.getClntWr();
+		SessionCalls calls = attachment.getCalls();
+		
+		clnt_wr.put(goodbye_msg.getBytes());
+		
+		calls.setQuit(false);
+		calls.setAlreadyQuit(true);
+		
+	}
 
 	private void etc(List<String> params, ProxyAtt attachment) {
 
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
 
-		String cmd = params.get(0);
-
-		// The proxy will be expecting the response from the pass command
-		if (cmd.equalsIgnoreCase("pass")) {
-			attachment.getCalls().setPass(true);
+		
+		if(attachment.usrProvided()){
+			String cmd = params.get(0);
+			
+			// The proxy will be expecting the response from the pass command
+			if (cmd.equalsIgnoreCase("pass")) {
+				attachment.getCalls().setPass(true);
+			}
+			
+			System.out.println("Comando "
+					+ Common.transferData(clnt_rd));
+			
+			clnt_rd.flip();
+			fwd.put(clnt_rd);
+			clnt_rd.clear();	
+			
+		} else {
+			
+			ByteBuffer clnt_wr = attachment.getClntWr();
+			String response = "-ERR[USRNEEDED] Need to provide a user.\r\n";
+			clnt_wr.put(response.getBytes());
+			stats.addUsrNeeded();
+			
 		}
 
-		System.out.println("estoy en etc");
-		System.out.println("Comando "
-				+ new String(Common.transferData(clnt_rd), Charset
-						.forName("UTF-8")));
-
-		clnt_rd.flip();
-		fwd.put(clnt_rd);
-		clnt_rd.clear();
 
 	}
 
@@ -549,7 +588,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		} else {
 			if (params.size() == 3) {
 				usersServers.put(params.get(1), params.get(2));
-				statusCode = "+OK Settings changed \r\n";
+				statusCode = "+OK Settings changed.\r\n";
 				stats.addOkCode();
 			} else {
 				statusCode = "-ERR[INVALID] Invalid parameters\r\n";
@@ -565,22 +604,40 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	// TOP msg n
 	// msg: number of message to retrieve
 	// n: number of lines from body to retrieve
-	private void top(List<String> params, ProxyAtt attachment) {
-
-		attachment.getCalls().setEmail(true);
-
-		ByteBuffer srv_wr = attachment.getServerWr();
-		ByteBuffer clnt_rd = attachment.getClntRd();
-
-		clnt_rd.flip();
-		srv_wr.put(clnt_rd);
-
-	}
 
 	// RETR msg
 	// retrieve the msg message
 	private void retr(List<String> params, ProxyAtt attachment) {
+		
+		attachment.getCalls().setEmail(true);
+		
+		ByteBuffer srv_wr = attachment.getServerWr();
+		ByteBuffer clnt_rd = attachment.getClntRd();
+		
+		clnt_rd.flip();
+		srv_wr.put(clnt_rd);
 
+	}
+	
+	//ANALIZAR
+	private void retrMsg(ProxyAtt attachment){
+		
+		ByteBuffer srv_rd = attachment.getServerRd();
+		ByteBuffer clnt_wr = attachment.getClntWr();
+		
+		System.out.println(Common.transferData(srv_rd));
+		
+		String analise = Common.transferData(srv_rd);
+		
+		if(analise.endsWith(".")){
+			attachment.getCalls().setEmail(false);
+		}
+		
+		srv_rd.flip();
+		clnt_wr.put(srv_rd);
+		srv_rd.clear();
+		
+		
 	}
 
 	private void histogram(List<String> params, ProxyAtt attachment) {
