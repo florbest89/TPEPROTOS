@@ -610,6 +610,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private void retr(List<String> params, ProxyAtt attachment) {
 		
 		attachment.getCalls().setEmail(true);
+		attachment.setTransformations(l33t, rotation);
 		
 		ByteBuffer srv_wr = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
@@ -623,19 +624,20 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private void retrMsg(ProxyAtt attachment){
 		
 		ByteBuffer srv_rd = attachment.getServerRd();
-		ByteBuffer clnt_wr = attachment.getClntWr();
-		
-		System.out.println(Common.transferData(srv_rd));
-		
-		String analise = Common.transferData(srv_rd);
-		
-		if(analise.endsWith(".")){
-			attachment.getCalls().setEmail(false);
+		srv_rd.flip();
+				
+		try {
+			
+			if(attachment.getMailParser().processMail(srv_rd)){
+				attachment.getCalls().setEmail(false);
+			}
+		} catch (IOException e) {
+			
+			System.out.println("Se pudrio el rancho en retrMsg");
 		}
 		
-		srv_rd.flip();
-		clnt_wr.put(srv_rd);
 		srv_rd.clear();
+		
 		
 		
 	}

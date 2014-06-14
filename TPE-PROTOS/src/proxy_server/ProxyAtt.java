@@ -3,6 +3,8 @@ package proxy_server;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
+import parser.MailParser;
+
 public class ProxyAtt {
 	
 	//Buffer to read from client
@@ -23,6 +25,8 @@ public class ProxyAtt {
 	private SocketChannel clntChannel;
 	//Session flags
 	private SessionCalls calls;
+	//Mail parser of client
+	private MailParser mailParse;
 	
 	public ProxyAtt(int bufSize,SocketChannel clntChannel){
 		clnt_rd = ByteBuffer.allocate(bufSize);
@@ -33,7 +37,9 @@ public class ProxyAtt {
 		admin = false;
 		usr_prov = false;
 		calls = new SessionCalls();
+		mailParse = new MailParser();
 		this.clntChannel = clntChannel;
+		
 		
 	}
 	
@@ -84,6 +90,14 @@ public class ProxyAtt {
 	
 	public SessionCalls getCalls(){
 		return calls;
+	}
+	
+	public MailParser getMailParser(){
+		return mailParse;
+	}
+	
+	public void setTransformations(boolean l33t, boolean rotation){
+		mailParse.setTransformations(l33t, rotation);
 	}
 	
 	
