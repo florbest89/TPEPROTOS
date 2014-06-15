@@ -41,6 +41,7 @@ public class MailParser {
 		String bufStr = Common.transferData(server_rd);
 		CharBuffer buf = CharBuffer.wrap(bufStr);
 		
+		
 		boolean isEmpty = false;
 		while (!isEmpty){
 			
@@ -159,7 +160,7 @@ public class MailParser {
 	}
 
 	private static boolean isEmptyLine(String str) {
-		return str.equals("\n");
+		return str.equals("\r\n");
 	}
 
 	private void savePartialBoudary(String str) {
@@ -236,7 +237,7 @@ public class MailParser {
 	
 
 	private static String makeInLine(String str) {
-		return str.replace("\n", "");
+		return str.replace("\r\n", "");
 	}
 
 	private static String l33tTransformation(String str) {
@@ -251,7 +252,7 @@ public class MailParser {
 
 	private static boolean boundaryIsComplete(String str) {
 		
-		return str.endsWith("\n");
+		return str.endsWith("\r\n");
 	}
 
 	private static boolean foundBoundary(String str) {

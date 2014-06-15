@@ -174,8 +174,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 				ResponseObject respOb = respParser.parse(buf);
 
-				System.out.println(respOb.getStatusCode() + " "
-						+ respOb.getBody());
+				//System.out.println(respOb.getStatusCode() + " "
+				//		+ respOb.getBody());
 
 				if (calls.isWelcome()) {
 					calls.setWelcome(false);
@@ -627,11 +627,14 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		
 		ByteBuffer srv_rd = attachment.getServerRd();
 		//srv_rd.flip();
-				
+		String debugStr = Common.transferData(srv_rd);
+				//srv_rd.flip();
 		try {
 			
+
 			if(attachment.getMailParser().processMail(srv_rd)){
 				attachment.getCalls().setEmail(false);
+				System.out.println("Fin de Mail");
 			}
 		} catch (IOException e) {
 			
