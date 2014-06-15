@@ -39,6 +39,8 @@ public class MailParser {
 		
 		
 		CharBuffer buf = server_rd.asCharBuffer();
+		System.out.println("Muestro CharBuffer");
+		System.out.println(buf);
 		
 		boolean isEmpty = false;
 		while (!isEmpty){
