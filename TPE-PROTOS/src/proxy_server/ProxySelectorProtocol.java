@@ -626,7 +626,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private void retrMsg(ProxyAtt attachment){
 		
 		ByteBuffer srv_rd = attachment.getServerRd();
-		srv_rd.flip();
+		//srv_rd.flip();
 				
 		try {
 			

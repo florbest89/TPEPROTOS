@@ -40,8 +40,6 @@ public class MailParser {
 		
 		String bufStr = Common.transferData(server_rd);
 		CharBuffer buf = CharBuffer.wrap(bufStr);
-		System.out.println("Muestro CharBuffer");
-		System.out.println(bufStr);
 		
 		boolean isEmpty = false;
 		while (!isEmpty){
