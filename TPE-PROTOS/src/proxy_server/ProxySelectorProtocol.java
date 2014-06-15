@@ -184,7 +184,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 					if (respOb.getStatusCode().toUpperCase().contains("+OK")) {
 						stats.addOkCode();
 					} else {
-						stats.addErrCode();
+						if(respOb.getStatusCode().toUpperCase().contains("-ERR")){
+							stats.addErrCode();
+						}
 					}
 
 					if (calls.isQuiting()) {
