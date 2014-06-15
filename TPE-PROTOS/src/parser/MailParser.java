@@ -153,7 +153,7 @@ public class MailParser {
 	
 	
 	private void returnProcessedImage() {
-		System.out.print("\n" + attachedImage.getImageString() + "\n");	
+		System.out.print("\r\n" + attachedImage.getImageString() + "\r\n");	
 		//writer.write("\n" + attachedImage.getImageString() + "\n");		
 	}
 
