@@ -38,7 +38,8 @@ public class MailParser {
 		// TODO Auto-generated method stub
 		
 		
-		CharBuffer buf = server_rd.asCharBuffer();
+		String bufStr = Common.transferData(server_rd);
+		CharBuffer buf = CharBuffer.wrap(bufStr);
 		System.out.println("Muestro CharBuffer");
 		System.out.println(buf);
 		
