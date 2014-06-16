@@ -1,7 +1,10 @@
 package parser;
 
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -26,7 +29,25 @@ public class MailParser {
 	private String partialBoundary = "";	
 	private String actualType = "";
 	private ImageHandler attachedImage;
+	private File mailFile;
+	private BufferedWriter fileWriter;
+	private BufferedReader fileReader;
 	
+	public boolean initializeMailFile (String username) {
+		mailFile = new File(username + ".mail");
+		try {
+			fileWriter = new BufferedWriter( new FileWriter(mailFile));
+		} catch (IOException e) {
+			return false;
+		}
+		return true;
+	}
+	
+	private void writeInMailFile(String data) throws IOException
+	{
+		fileWriter.write(data);
+	}
+		
 	
 	public void setTransformations(boolean l33t, boolean rotation){
 		this.leetIsActivated = l33t;
@@ -132,8 +153,7 @@ public class MailParser {
 										
 				if (!pendingBoundary){
 						if (!(contentReady && isImage))
-							System.out.print(str);
-							//writer.write(str);
+							writeInMailFile(str);
 				}
 			}else{
 				//Lei linea NULL
@@ -154,9 +174,9 @@ public class MailParser {
 	}
 	
 	
-	private void returnProcessedImage() {
-		System.out.print("\r\n" + attachedImage.getImageString() + "\r\n");	
-		//writer.write("\n" + attachedImage.getImageString() + "\n");		
+	private void returnProcessedImage() throws IOException {
+		writeInMailFile("\r\n" + attachedImage.getImageString() + "\r\n");	
+		
 	}
 
 	private static boolean isEmptyLine(String str) {
