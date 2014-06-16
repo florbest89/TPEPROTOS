@@ -1,5 +1,6 @@
 package proxy_server;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
@@ -107,6 +108,11 @@ public class ProxyAtt {
 
 	public void resetSessionCalls() {
 		calls.resetCalls();		
+	}
+	
+	public boolean readMail(ByteBuffer readBuffer) throws IOException
+	{
+		return mailParse.readMail(readBuffer);
 	}
 	
 	

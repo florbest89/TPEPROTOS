@@ -691,7 +691,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private void retrieveMsg(ProxyAtt attachment) {
 		
-		
+		//TODO llename!! ah y por cierto... tiro IOException muajaja
+		attachment.readMail(readBuffer);
 
 	}
 

@@ -4,6 +4,7 @@ package parser;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -34,13 +35,18 @@ public class MailParser {
 	private BufferedReader fileReader;
 	
 	public boolean initializeMailFile (String username) {
-		mailFile = new File(username + ".mail");
+		mailFile = new File("temp/" + username + ".mail");
 		try {
 			fileWriter = new BufferedWriter( new FileWriter(mailFile));
 		} catch (IOException e) {
 			return false;
 		}
 		return true;
+	}
+	
+	private void prepareForReading() throws IOException{
+		fileWriter.close();
+		fileReader = new BufferedReader( new FileReader(mailFile));		
 	}
 	
 	private void writeInMailFile(String data) throws IOException
@@ -166,6 +172,7 @@ public class MailParser {
 		//FIN DEL MAIL
 		if (isEndOfMail(str))
 		{
+			this.prepareForReading();
 			return true;					
 		}	
 		
@@ -340,6 +347,22 @@ public class MailParser {
 		
 		
 				
+	}
+
+	public boolean readMail(ByteBuffer readBuffer) throws IOException {
+		// Empiezo a leer el archivo
+		int size = readBuffer.capacity();
+		char[] cbuf = new char[size];
+		fileReader.read(cbuf);
+		String str = String.valueOf(cbuf);
+		readBuffer = ByteBuffer.wrap(str.getBytes());
+		if (isEndOfMail(str)){
+			fileReader.close();
+			mailFile.delete();
+			return true;
+		}
+				
+		return false;
 	}
 	
 	
