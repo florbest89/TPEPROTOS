@@ -8,6 +8,7 @@ public class SessionCalls {
 	private boolean email;
 	private boolean quit;
 	private boolean alreadyquit;
+	private boolean retrMail;
 	
 	public boolean alreadyQuited() {
 		return alreadyquit;
@@ -57,6 +58,25 @@ public class SessionCalls {
 	
 	public boolean isQuiting(){
 		return quit;
+	}
+	
+	public void setRetrMail(boolean retrMail){
+		this.retrMail = retrMail;
+	}
+	
+	public boolean isRetrMail(){
+		return retrMail;
+	}
+
+	public void resetCalls() {
+		retrMail = false;
+		quit = false;
+		email = false;
+		welcome = false;
+		pass = false;
+		capa = false;
+		alreadyquit = false;
+		
 	}
 	
 	

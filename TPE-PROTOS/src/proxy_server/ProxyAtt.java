@@ -19,8 +19,8 @@ public class ProxyAtt {
 	private boolean logged;
 	//Indicates if the user is admin
 	private boolean admin;
-	//Indicates if a username was provided
-	private boolean usr_prov;
+	//Indicates the user of this channel
+	private String user;
 	//Client SocketChannel
 	private SocketChannel clntChannel;
 	//Session flags
@@ -35,7 +35,6 @@ public class ProxyAtt {
 		originsr_wr = ByteBuffer.allocate(bufSize);
 		logged = false;
 		admin = false;
-		usr_prov = false;
 		calls = new SessionCalls();
 		mailParse = new MailParser();
 		this.clntChannel = clntChannel;
@@ -80,12 +79,12 @@ public class ProxyAtt {
 		return originsr_wr;
 	}
 	
-	public void setUsrProv(boolean usr_prov){
-		this.usr_prov = usr_prov;
+	public void setUsr(String usr_prov){
+		this.user = usr_prov;
 	}
 	
 	public boolean usrProvided(){
-		return usr_prov;
+		return user != null;
 	}
 	
 	public SessionCalls getCalls(){
@@ -98,6 +97,16 @@ public class ProxyAtt {
 	
 	public void setTransformations(boolean l33t, boolean rotation){
 		mailParse.setTransformations(l33t, rotation);
+	}
+	
+	
+	public boolean initializeParser(){
+		return mailParse.initializeMailFile(user);
+	}
+
+
+	public void resetSessionCalls() {
+		calls.resetCalls();		
 	}
 	
 	
