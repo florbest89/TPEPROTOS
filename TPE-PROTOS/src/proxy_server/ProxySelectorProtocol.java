@@ -169,8 +169,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				channel.close();
 			} else {
 
-				ResponseObject respOb = respParser.parse(buf);
-
 				// System.out.println(respOb.getStatusCode() + " "
 				// + respOb.getBody());
 
@@ -178,8 +176,38 @@ public class ProxySelectorProtocol implements TCPProtocol {
 					calls.setWelcome(false);
 				} else {
 
+					if (calls.isEmail()) {
+						processMail(attachment);
+						key.interestOps(SelectionKey.OP_READ);
+						return;
+					}
+
+					if (calls.isQuiting()) {
+						clntQuits(attachment);
+						buf.clear();
+					}
+
+					ResponseObject respOb = respParser.parse(buf);
+
+					buf.flip();
+					ByteBuffer clnt_wr = attachment.getClntWr();
+					clnt_wr.put(buf);
+					
+					
 					if (respOb.getStatusCode().toUpperCase().contains("+OK")) {
 						stats.addOkCode();
+						if (calls.isPass()) {
+							attachment.setLogState(true);
+						} else {
+							if (calls.isCapa()) {
+								capaResp(attachment);
+								calls.setCapa(false);
+							} else {
+								if(calls.isWtngRetr()){
+									calls.setEmail(true);
+								}
+							}
+						}
 					} else {
 						if (respOb.getStatusCode().toUpperCase()
 								.contains("-ERR")) {
@@ -188,35 +216,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 						}
 					}
 
-					if (calls.isQuiting()) {
-						clntQuits(attachment);
-						buf.clear();
-					}
 
-					if (calls.isEmail()) {
-						processMail(attachment);
-						key.interestOps(SelectionKey.OP_READ);
-						return;
-					}
-
-					buf.flip();
-					ByteBuffer clnt_wr = attachment.getClntWr();
-					clnt_wr.put(buf);
-
-					// Reading the status code for the PASS command
-					if (calls.isPass()) {
-						if (respOb.getStatusCode().equals("+OK")) {
-							attachment.setLogState(true);
-						}
-						calls.setPass(false);
-					} else {
-						// Reading the status code for the CAPA command
-						if (calls.isCapa()) {
-							capaResp(attachment);
-							calls.setCapa(false);
-						}
-
-					}
+					
 				}
 
 			}
@@ -274,10 +275,11 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			key.channel().close();
 			key.interestOps(SelectionKey.OP_READ);
 		} else {
-			if(attachment.getCalls().isRetrMail() && attachment.isClient(channel)){
+			if (attachment.getCalls().isRetrMail()
+					&& attachment.isClient(channel)) {
 				retrieveMsg(attachment);
 				key.interestOps(SelectionKey.OP_WRITE);
-				
+
 			} else {
 				key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
 			}
@@ -286,7 +288,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private void auth(ProxyAtt attachment) {
 
-		
 		ByteBuffer clnt_wr = attachment.getClntWr();
 		String response = "-ERR[INVALID] Command AUTH is not supported.\r\n";
 
@@ -317,7 +318,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				if (serverAddr == null) {
 					serverAddr = defaultServer;
 				}
-
 
 				if (username.equals(admin)) {
 					attachment.setAdmin(true);
@@ -371,14 +371,11 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 			String response = Common.transferData(clnt_wr);
 
-			System.out.println(response);
 
 			String adminOptions = "MONITOR\nSETTINGS\nSETSERVER\n.\r\n";
 
-			System.out.println(response);
 			response = response.replace(".", adminOptions);
-			System.out.println(response);
-
+			
 			clnt_wr.clear();
 			clnt_wr.put(response.getBytes());
 
@@ -389,7 +386,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	// CAPA request from client, differs from capa response
 	private void capaReq(List<String> params, ProxyAtt attachment) {
 
-		System.out.println("Estoy en el metodo CAPA");
 		String response = "+OK\nCAPA\n";
 
 		if (!attachment.usrProvided()) {
@@ -501,12 +497,10 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	private void etc(List<String> params, ProxyAtt attachment) {
 
 		System.out.println("Estoy en etc con comando: " + params.get(0));
-		
-		
+
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
-		
-		System.out.println(Common.transferData(clnt_rd));
+
 
 		if (attachment.usrProvided()) {
 			String cmd = params.get(0);
@@ -515,7 +509,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			if (cmd.equalsIgnoreCase("pass")) {
 				attachment.getCalls().setPass(true);
 			}
-
 
 			clnt_rd.flip();
 			fwd.put(clnt_rd);
@@ -611,7 +604,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		if (attachment.usrProvided()) {
 
-			attachment.getCalls().setEmail(true);
+			attachment.getCalls().setWtngRetr(true);
 			attachment.setTransformations(l33t, rotation);
 			attachment.initializeParser();
 
@@ -695,17 +688,15 @@ public class ProxySelectorProtocol implements TCPProtocol {
 	}
 
 	private void retrieveMsg(ProxyAtt attachment) {
-		
+
 		ByteBuffer clnt_wr = attachment.getClntWr();
 		clnt_wr.clear();
-		
-		
+
 		try {
-			if(attachment.readMail(clnt_wr)){
+			if (attachment.readMail(clnt_wr)) {
 				attachment.getCalls().setRetrMail(false);
 			}
-			System.out.println(Common.transferData(clnt_wr));
-			
+
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

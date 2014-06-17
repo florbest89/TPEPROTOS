@@ -6,9 +6,10 @@ public class SessionCalls {
 	private boolean pass;
 	private boolean capa;
 	private boolean email;
+	private boolean retrMail;
 	private boolean quit;
 	private boolean alreadyquit;
-	private boolean retrMail;
+	private boolean wtngRetr;
 	
 	public boolean alreadyQuited() {
 		return alreadyquit;
@@ -76,7 +77,16 @@ public class SessionCalls {
 		pass = false;
 		capa = false;
 		alreadyquit = false;
+		wtngRetr = false;
 		
+	}
+
+	public boolean isWtngRetr() {
+		return wtngRetr;
+	}
+
+	public void setWtngRetr(boolean wtngRetr) {
+		this.wtngRetr = wtngRetr;
 	}
 	
 	
