@@ -13,7 +13,7 @@ public class ResponseParser {
 		
 		if(!response.contains("CAPA")){
 			//If the response is not of CAPA type, I read from the buffer until I find a \n
-			int index = response.indexOf('\n');		
+			int index = response.indexOf("\r\n");		
 			response = response.substring(0, index);			
 			params = response.split(" ");
 		} else {

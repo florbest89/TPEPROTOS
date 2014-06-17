@@ -275,7 +275,13 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			key.channel().close();
 			key.interestOps(SelectionKey.OP_READ);
 		} else {
-			key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+			if(attachment.getCalls().isRetrMail() && attachment.isClient(channel)){
+				retrieveMsg(attachment);
+				key.interestOps(SelectionKey.OP_WRITE);
+				
+			} else {
+				key.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+			}
 		}
 	}
 
@@ -424,8 +430,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		// If the request doesn't have 2 parameters OR the 2nd parameter isn't
 		// ON or OFF the request is invalid
 		if (params.size() != 2
-				|| (!(params.get(1).equalsIgnoreCase("ON") && !(params.get(1)
-						.equalsIgnoreCase("OFF"))))) {
+				|| (!params.get(1).equalsIgnoreCase("ON") && !params.get(1)
+						.equalsIgnoreCase("OFF"))) {
 			statusCode = "-ERR[INVALID] Invalid parameters. \r\n";
 			stats.addInvalid();
 		} else {
@@ -540,8 +546,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		// If the request doesn't have 2 parameters OR the 2nd parameter isn't
 		// ON or OFF the request is invalid
 		if (params.size() != 2
-				|| (!(params.get(1).equalsIgnoreCase("ON") && !(params.get(1)
-						.equalsIgnoreCase("OFF"))))) {
+				|| (!params.get(1).equalsIgnoreCase("ON") && !params.get(1)
+						.equalsIgnoreCase("OFF"))) {
 			statusCode = "-ERR[INVALID] Invalid parameters. \r\n";
 			stats.addInvalid();
 		} else {
@@ -635,6 +641,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			if (attachment.getMailParser().processMail(srv_rd)) {
 				attachment.getCalls().setEmail(false);
 				attachment.getCalls().setRetrMail(true);
+				attachment.getClntWr().putInt(1);
 				System.out.println("Fin de Mail");
 			}
 		} catch (IOException e) {
@@ -691,8 +698,22 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private void retrieveMsg(ProxyAtt attachment) {
 		
-		//TODO llename!! ah y por cierto... tiro IOException muajaja
-		attachment.readMail(readBuffer);
+		ByteBuffer clnt_wr = attachment.getClntWr();
+		clnt_wr.clear();
+		
+		System.out.println("entreeeeee");
+		
+		try {
+			if(attachment.readMail(clnt_wr)){
+				attachment.getCalls().setRetrMail(false);
+			}
+			System.out.println(Common.transferData(clnt_wr));
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			System.out.println("se cago todo");
+		}
 
 	}
 

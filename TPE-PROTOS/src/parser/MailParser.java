@@ -35,10 +35,11 @@ public class MailParser {
 	private BufferedReader fileReader;
 	
 	public boolean initializeMailFile (String username) {
-		mailFile = new File("temp/" + username + ".mail");
+		mailFile = new File("tmp/" + username + ".mail");
 		try {
 			fileWriter = new BufferedWriter( new FileWriter(mailFile));
 		} catch (IOException e) {
+			System.out.println("no creo nada");
 			return false;
 		}
 		return true;
@@ -355,7 +356,7 @@ public class MailParser {
 		char[] cbuf = new char[size];
 		fileReader.read(cbuf);
 		String str = String.valueOf(cbuf);
-		readBuffer = ByteBuffer.wrap(str.getBytes());
+		readBuffer.put(ByteBuffer.wrap(str.getBytes()));
 		if (isEndOfMail(str)){
 			fileReader.close();
 			mailFile.delete();
