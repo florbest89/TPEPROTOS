@@ -95,6 +95,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		SocketChannel channel = (SocketChannel) key.channel();
 
 		ProxyAtt attachment = (ProxyAtt) key.attachment();
+
 		SessionCalls calls = attachment.getCalls();
 		ByteBuffer buf;
 		ByteBuffer writer;
@@ -103,6 +104,12 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		// See if this channel belongs to the client
 		if (attachment.isClient(channel)) {
+
+			if (attachment.serverClosed()) {
+				attachment.closeServer();
+				channel.close();
+				return;
+			}
 
 			stats.addAccess();
 
@@ -189,22 +196,21 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 					ResponseObject respOb = respParser.parse(buf);
 
-					buf.flip();
-					ByteBuffer clnt_wr = attachment.getClntWr();
-					clnt_wr.put(buf);
-					
-					
 					if (respOb.getStatusCode().toUpperCase().contains("+OK")) {
 						stats.addOkCode();
 						if (calls.isPass()) {
 							attachment.setLogState(true);
+							calls.setPass(false);
 						} else {
 							if (calls.isCapa()) {
 								capaResp(attachment);
 								calls.setCapa(false);
 							} else {
-								if(calls.isWtngRetr()){
-									calls.setEmail(true);
+								if (calls.isWtngRetr()) {
+									waitingRetr(attachment);
+									// I need to retrieve the status code first
+									key.interestOps(SelectionKey.OP_WRITE);
+									return;
 								}
 							}
 						}
@@ -216,8 +222,10 @@ public class ProxySelectorProtocol implements TCPProtocol {
 						}
 					}
 
+					buf.flip();
+					ByteBuffer clnt_wr = attachment.getClntWr();
+					clnt_wr.put(buf);
 
-					
 				}
 
 			}
@@ -231,6 +239,29 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		} else {
 			key.interestOps(SelectionKey.OP_READ);
 		}
+
+	}
+
+	private void waitingRetr(ProxyAtt attachment) {
+
+		// Next I'm expecting the mail
+		attachment.getCalls().setEmail(true);
+
+		ByteBuffer serv_rd = attachment.getServerRd();
+		ByteBuffer clnt_wr = attachment.getClntWr();
+
+		String response = Common.transferData(serv_rd);
+
+		int index = response.indexOf('\r');
+
+		String substring = response.substring(0, index);
+		substring = substring + "\r\n";
+
+		clnt_wr.put(response.getBytes());
+
+		serv_rd.clear();
+		serv_rd.put((response.substring(index + 2, response.length()))
+				.getBytes());
 
 	}
 
@@ -352,6 +383,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 						attachment);
 				// The proxy will be expecting the welcome message
 				attachment.getCalls().setWelcome(true);
+				attachment.setSrvChannel(channel);
 
 			}
 		} else {
@@ -365,19 +397,18 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private void capaResp(ProxyAtt attachment) {
 
-		ByteBuffer clnt_wr = attachment.getClntWr();
+		ByteBuffer serv_rd = attachment.getServerRd();
 
 		if (attachment.isAdmin()) {
 
-			String response = Common.transferData(clnt_wr);
-
+			String response = Common.transferData(serv_rd);
 
 			String adminOptions = "MONITOR\nSETTINGS\nSETSERVER\n.\r\n";
 
 			response = response.replace(".", adminOptions);
-			
-			clnt_wr.clear();
-			clnt_wr.put(response.getBytes());
+
+			serv_rd.clear();
+			serv_rd.put(response.getBytes());
 
 		}
 
@@ -500,7 +531,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
-
 
 		if (attachment.usrProvided()) {
 			String cmd = params.get(0);

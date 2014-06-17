@@ -24,6 +24,8 @@ public class ProxyAtt {
 	private String user;
 	//Client SocketChannel
 	private SocketChannel clntChannel;
+	//Server SocketChannel
+	private SocketChannel serverChannel;
 	//Session flags
 	private SessionCalls calls;
 	//Mail parser of client
@@ -113,6 +115,24 @@ public class ProxyAtt {
 	public boolean readMail(ByteBuffer readBuffer) throws IOException
 	{
 		return mailParse.readMail(readBuffer);
+	}
+	
+	public void setSrvChannel(SocketChannel channel){
+		this.serverChannel = channel;
+	}
+	
+	public boolean serverClosed(){
+		if(serverChannel == null)
+		{
+			return false;
+		} else {
+			return !serverChannel.isOpen();
+		}
+		
+	}
+	
+	public void closeServer() throws IOException{
+		serverChannel.close();
 	}
 	
 	

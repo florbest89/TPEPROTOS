@@ -66,6 +66,7 @@ public class MailParser {
 		// TODO Auto-generated method stub
 		
 		
+		
 		String bufStr = Common.transferData(server_rd);
 		CharBuffer buf = CharBuffer.wrap(bufStr);
 		
@@ -79,6 +80,8 @@ public class MailParser {
 				
 				
 				String str = cleanLine(line);
+				
+				
 				
 				if (pendingBoundary)
 				{
