@@ -116,7 +116,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			} else {
 
 				RequestObject request = reqParser.parse(buf);
-				System.out.println(request.getCommand());
 
 				switch (request.getType()) {
 				case AUTH:
@@ -287,6 +286,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private void auth(ProxyAtt attachment) {
 
+		
 		ByteBuffer clnt_wr = attachment.getClntWr();
 		String response = "-ERR[INVALID] Command AUTH is not supported.\r\n";
 
@@ -318,8 +318,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 					serverAddr = defaultServer;
 				}
 
-				System.out.println("el username es " + username
-						+ " y es administrador? " + username.equals(admin));
 
 				if (username.equals(admin)) {
 					attachment.setAdmin(true);
@@ -369,11 +367,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		ByteBuffer clnt_wr = attachment.getClntWr();
 
-		System.out.println("Soy administrador? : " + attachment.isAdmin());
-
 		if (attachment.isAdmin()) {
-
-			System.out.println("user es administrador");
 
 			String response = Common.transferData(clnt_wr);
 
@@ -506,8 +500,13 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private void etc(List<String> params, ProxyAtt attachment) {
 
+		System.out.println("Estoy en etc con comando: " + params.get(0));
+		
+		
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
+		
+		System.out.println(Common.transferData(clnt_rd));
 
 		if (attachment.usrProvided()) {
 			String cmd = params.get(0);
@@ -517,7 +516,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				attachment.getCalls().setPass(true);
 			}
 
-			System.out.println("Comando " + Common.transferData(clnt_rd));
 
 			clnt_rd.flip();
 			fwd.put(clnt_rd);
@@ -641,7 +639,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			if (attachment.getMailParser().processMail(srv_rd)) {
 				attachment.getCalls().setEmail(false);
 				attachment.getCalls().setRetrMail(true);
-				attachment.getClntWr().putInt(1);
+				attachment.getClntWr().putChar('.');
 				System.out.println("Fin de Mail");
 			}
 		} catch (IOException e) {
@@ -701,7 +699,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		ByteBuffer clnt_wr = attachment.getClntWr();
 		clnt_wr.clear();
 		
-		System.out.println("entreeeeee");
 		
 		try {
 			if(attachment.readMail(clnt_wr)){

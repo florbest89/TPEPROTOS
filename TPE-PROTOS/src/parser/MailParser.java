@@ -174,6 +174,7 @@ public class MailParser {
 		if (isEndOfMail(str))
 		{
 			this.prepareForReading();
+			resetTypes();
 			return true;					
 		}	
 		

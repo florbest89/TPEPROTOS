@@ -9,13 +9,17 @@ public class RequestParser {
 
 		String request = Common.transferData(buffer);
 
-		request = request.substring(0, request.indexOf('\n'));
+		if(request.contains("\r")){
+			request = request.substring(0, request.indexOf('\r'));
+		} else {
+			request = request.substring(0, request.indexOf('\n'));
+		}
+		
 		String[] params = request.split(" ");
 
 		RequestObject reqOb = new RequestObject();
 		String cmd = params[0];
 
-		System.out.println(cmd);
 
 		if (cmd.equalsIgnoreCase("USER")) {
 			reqOb.setType(RequestType.USER);
@@ -47,7 +51,7 @@ public class RequestParser {
 											if(cmd.equalsIgnoreCase("QUIT")){
 												reqOb.setType(RequestType.QUIT);
 											}else {
-												if(cmd.toLowerCase().contains("AUTH")){
+												if(cmd.equalsIgnoreCase("AUTH")){
 													reqOb.setType(RequestType.AUTH);
 													
 												} else{													
