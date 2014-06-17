@@ -21,13 +21,13 @@ public class MailParser {
 	//Variables de Instancia
 	private boolean isPlain = false;
 	private boolean isImage = false;
-	private boolean pendingBoundary = false;
+	private boolean pendingLine = false;
 	private boolean contentReady = false;
 	private boolean leetIsActivated = true;
 	private boolean rotationIsActivated = true;
 	
 	private String actualBoundary= "";
-	private String partialBoundary = "";	
+	private String partialLine = "";	
 	private String actualType = "";
 	private ImageHandler attachedImage;
 	private File mailFile;
@@ -83,22 +83,25 @@ public class MailParser {
 				
 				
 				
-				if (pendingBoundary)
+				if (pendingLine)
 				{
 					//Junto las partes de la Boundary
-					str = joinSplittedBoundary(partialBoundary, str);
+					str = joinSplittedLine(partialLine, str);
 					
 				}
 				
-				if (isEmptyLine(str) && (isPlain || isImage))
+				if (!lineIsComplete(str)){
+					savePartialLine(str);
+				}
+				if(!pendingLine)
 				{
-					//Ya tengo el tipo y lei la linea vacia, lo proximo que viene es el contenido
-					contentReady = true;
-					
-				}else if (foundBoundary(str))
-				{
-					//Me fijo si recibi una linea completa
-					if (boundaryIsComplete(str))
+				
+					if (isEmptyLine(str) && (isPlain || isImage))
+					{
+						//Ya tengo el tipo y lei la linea vacia, lo proximo que viene es el contenido
+						contentReady = true;
+						
+					}else if (foundBoundary(str))
 					{
 						//Si llegue al final de la seccion, limpio los tipos actuales y reseto los flags
 						String boundary = filterBoundary(str);
@@ -116,54 +119,49 @@ public class MailParser {
 								
 						}
 						actualBoundary = boundary;								
-					}else{
-						//Si no esta completa, me guardo lo que tengo hasta el momento
-						savePartialBoudary(str);
 						
 					}
+					if (!contentReady){						
 					
-				}
-				if (!contentReady){						
-				
-					//Considero un posible header
-					String[] headerLine = parseHeader(str);
-					
-					if (isHeader(headerLine))
-					{
-						//Obtengo Header y Value
-						String headerName = getHeaderName(headerLine);
-						String headerValue = getHeaderValue(headerLine);
+						//Considero un posible header
+						String[] headerLine = parseHeader(str);
 						
-						//Analizo Header
-						if (isContentType(headerName))
+						if (isHeader(headerLine))
 						{
-							//Obtengo el Tipo y Actualizo Flags
-							actualType = getContentType(headerValue);
-							checkTypes();									
+							//Obtengo Header y Value
+							String headerName = getHeaderName(headerLine);
+							String headerValue = getHeaderValue(headerLine);
 							
-						}else if (isTransferEncoding(headerName))
-						{
-							//Obtengo el Encoding
-							if(attachedImage != null){
-								attachedImage.setEncoding(headerValue);
+							//Analizo Header
+							if (isContentType(headerName))
+							{
+								//Obtengo el Tipo y Actualizo Flags
+								actualType = getContentType(headerValue);
+								checkTypes();									
+								
+							}else if (isTransferEncoding(headerName))
+							{
+								//Obtengo el Encoding
+								if(attachedImage != null){
+									attachedImage.setEncoding(headerValue);
+								}
+								
+								
 							}
-							
-							
+						 
 						}
-					 
+					}else{
+						//Contenido Listo
+						if (isPlain && leetIsActivated)
+							str = l33tTransformation(str);
+						
+						if (isImage)
+							loadImage(str);
 					}
-				}else{
-					//Contenido Listo
-					if (isPlain && leetIsActivated)
-						str = l33tTransformation(str);
-					
-					if (isImage)
-						loadImage(str);
-				}
-										
-				if (!pendingBoundary){
+											
 						if (!(contentReady && isImage))
-							writeInMailFile(str);
+								writeInMailFile(str);
+					
 				}
 			}else{
 				//Lei linea NULL
@@ -195,9 +193,9 @@ public class MailParser {
 		return str.equals("\r\n");
 	}
 
-	private void savePartialBoudary(String str) {
-		partialBoundary = str;
-		pendingBoundary = true;		
+	private void savePartialLine(String str) {
+		partialLine = str;
+		pendingLine = true;		
 	}
 
 	private static String getContentType(String headerValue) {
@@ -240,11 +238,11 @@ public class MailParser {
 		return str.contains("\r\n.\r\n");
 	}
 
-	private String joinSplittedBoundary(String part,
+	private String joinSplittedLine(String part,
 			String str) {
 		str = part.concat(str);
-		partialBoundary = "";
-		pendingBoundary = false;
+		partialLine = "";
+		pendingLine = false;
 		return str;
 	}
 
@@ -282,7 +280,7 @@ public class MailParser {
 		return str;
 	}
 
-	private static boolean boundaryIsComplete(String str) {
+	private static boolean lineIsComplete(String str) {
 		
 		return str.endsWith("\r\n");
 	}
