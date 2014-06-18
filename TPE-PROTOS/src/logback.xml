@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	<property name="DEFAULT_PATTERN" value="%msg" scope="CONTEXT" />
+	
+	<appender name="CLIENT-FILE" class="ch.qos.logback.core.FileAppender">
+		<file>log/client.log</file>
+		<level>INFO</level>
+		<append>true</append>
+		<encoder>
+			<pattern>${DEFAULT_PATTERN}
+			</pattern>
+		</encoder>
+	</appender>
+	
+	<appender name="SERVER-FILE" class="ch.qos.logback.core.FileAppender">
+		<file>log/server.log</file>
+		<level>INFO</level>
+		<append>true</append>
+		<encoder>
+			<pattern>${DEFAULT_PATTERN}
+			</pattern>
+		</encoder>
+	</appender>
+
+		
+
+	<logger name="client.log">
+		<appender-ref ref="CLIENT-FILE" />
+	</logger>
+	
+	<logger name="server.log">
+		<appender-ref ref="SERVER-FILE" />
+	</logger>
+	
+
+</configuration>

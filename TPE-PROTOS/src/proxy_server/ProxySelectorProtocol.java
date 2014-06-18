@@ -10,11 +10,15 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.Charset;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.classic.Logger;
 import parser.Common;
 import parser.RequestObject;
 import parser.RequestParser;
@@ -25,7 +29,11 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	private int bufSize; // Size of buffers
 	private Map<String, String> usersServers = new HashMap<String, String>();
-
+	
+	//Logs
+	private Logger clnt_log = (Logger) LoggerFactory.getLogger("client.log");
+	private Logger srv_log = (Logger) LoggerFactory.getLogger("server.log");
+	
 	// Proxy properties
 	private Properties prop;
 
@@ -69,6 +77,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		port = Integer.valueOf(prop.getProperty("pop3-port"));
 		defaultServer = prop.getProperty("default-server");
 		admin = prop.getProperty("admin");
+		
 
 	}
 
@@ -99,18 +108,22 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		SessionCalls calls = attachment.getCalls();
 		ByteBuffer buf;
 		ByteBuffer writer;
+		
+		Date date = new Date();
 
 		long bytesRead;
 
 		// See if this channel belongs to the client
 		if (attachment.isClient(channel)) {
 
+			//See if server channel is closed. If it is, close this channel
 			if (attachment.serverClosed()) {
 				attachment.closeServer();
 				channel.close();
+				key.interestOps(SelectionKey.OP_READ);
 				return;
 			}
-
+			
 			stats.addAccess();
 
 			buf = attachment.getClntRd();
@@ -119,9 +132,13 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			bytesRead = channel.read(buf);
 
 			if (bytesRead == -1) {
+				clnt_log.info(date.toString() + " | [" + attachment.getUser() + "] : closed conection.\n");
 				channel.close();
 			} else {
 
+				
+				clnt_log.info(date.toString() + " | [" + attachment.getUser() + "] : " + Common.transferData(buf) + "\n" );
+				
 				RequestObject request = reqParser.parse(buf);
 
 				switch (request.getType()) {
@@ -174,11 +191,10 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			// The other end closed
 			if (bytesRead == -1) {
 				channel.close();
+				srv_log.info(date.toString() + " | ["+attachment.getUser() + "] server closed connection.\n ");
 			} else {
 
-				// System.out.println(respOb.getStatusCode() + " "
-				// + respOb.getBody());
-
+				 
 				if (calls.isWelcome()) {
 					calls.setWelcome(false);
 				} else {
@@ -196,6 +212,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 					ResponseObject respOb = respParser.parse(buf);
 
+					srv_log.info(date.toString() + " | [" + attachment.getUser() + "] server response: " + respOb.getStatusCode() + " " + respOb.getBody() + "\n");
+					
 					if (respOb.getStatusCode().toUpperCase().contains("+OK")) {
 						stats.addOkCode();
 						if (calls.isPass()) {
@@ -241,29 +259,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 
 	}
-
-	private void waitingRetr(ProxyAtt attachment) {
-
-		// Next I'm expecting the mail
-		attachment.getCalls().setEmail(true);
-
-		ByteBuffer serv_rd = attachment.getServerRd();
-		ByteBuffer clnt_wr = attachment.getClntWr();
-
-		String response = Common.transferData(serv_rd);
-
-		int index = response.indexOf('\r');
-
-		String substring = response.substring(0, index);
-		substring = substring + "\r\n";
-
-		clnt_wr.put(response.getBytes());
-
-		serv_rd.clear();
-		serv_rd.put((response.substring(index + 2, response.length()))
-				.getBytes());
-
-	}
+	
 
 	// Aca hay que hacer que el proxy maneje y devuelva el response del server
 	@Override
@@ -317,6 +313,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 	}
 
+	//We need to tell the client we DON'T support the AUTH command
 	private void auth(ProxyAtt attachment) {
 
 		ByteBuffer clnt_wr = attachment.getClntWr();
@@ -326,6 +323,7 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		clnt_wr.put(response.getBytes());
 	}
 
+	//Called when the client sends the USER command
 	private void logUser(List<String> params, ProxyAtt attachment,
 			SelectionKey key) throws UnknownHostException, IOException {
 
@@ -356,8 +354,6 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 				ByteBuffer server = attachment.getServerWr();
 				ByteBuffer clnt = attachment.getClntRd();
-				// Pongo lo que escribio el cliente en lo que le pido al
-				// servidor
 
 				clnt.flip();
 
@@ -376,14 +372,13 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				}
 				channel.configureBlocking(false);
 
-				// I register a new key with the same ProxyAtt but with
-				// non-client
-				// state
+				attachment.getCalls().setWelcome(true);
+				attachment.setSrvChannel(channel);
+				
+				// I register a new key with the same ProxyAtt
 				channel.register(key.selector(), SelectionKey.OP_READ,
 						attachment);
 				// The proxy will be expecting the welcome message
-				attachment.getCalls().setWelcome(true);
-				attachment.setSrvChannel(channel);
 
 			}
 		} else {
@@ -395,6 +390,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	}
 
+	//Called before giving the response of the origin server to the client.
+	//If the client is the administrator, we add the capabilities of MONITOR, SETTINGS and SETSERVER
 	private void capaResp(ProxyAtt attachment) {
 
 		ByteBuffer serv_rd = attachment.getServerRd();
@@ -406,6 +403,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			String adminOptions = "MONITOR\nSETTINGS\nSETSERVER\n.\r\n";
 
 			response = response.replace(".", adminOptions);
+			
+			srv_log.info(new Date().toString() + " | [" + attachment.getUser() + "] server response: " + response + "\n");
 
 			serv_rd.clear();
 			serv_rd.put(response.getBytes());
@@ -421,6 +420,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 		if (!attachment.usrProvided()) {
 			response = response + "USER\nQUIT\n.\r\n";
+			
+			srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + response +  "\n");
 
 			ByteBuffer buf = attachment.getClntWr();
 
@@ -444,6 +445,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		}
 	}
 
+	//Called when the l33t command is requested by the client. Only the administrator is enabled
+	//to use it
 	private void l33t(List<String> params, ProxyAtt attachment) {
 
 		String statusCode = "";
@@ -475,9 +478,14 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			}
 		}
 
+		srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + statusCode + "\n");
 		ByteBuffer buf = attachment.getClntWr();
 		buf.put(statusCode.getBytes());
 
+	}
+	
+	private void setl33t(boolean l33t) {
+		this.l33t = l33t;
 	}
 
 	private void quit(List<String> params, ProxyAtt attachment) {
@@ -500,11 +508,13 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			}
 
 			writer.put(statusCode.getBytes());
+			
+			srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + statusCode +  "\n");
 
 		} else {
 			writer = attachment.getServerWr();
 			ByteBuffer reader = attachment.getClntRd();
-
+			
 			reader.flip();
 			writer.put(reader);
 			calls.setQuit(true);
@@ -525,9 +535,9 @@ public class ProxySelectorProtocol implements TCPProtocol {
 
 	}
 
+	//The proxy only forwards commands that aren't of use to it
 	private void etc(List<String> params, ProxyAtt attachment) {
 
-		System.out.println("Estoy en etc con comando: " + params.get(0));
 
 		ByteBuffer fwd = attachment.getServerWr();
 		ByteBuffer clnt_rd = attachment.getClntRd();
@@ -550,16 +560,14 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			String response = "-ERR[USRNEEDED] Need to provide a user.\r\n";
 			clnt_wr.put(response.getBytes());
 			stats.addUsrNeeded();
+			
+			srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + response + "\n");
 
 		}
 
 	}
 
-	private void setl33t(boolean l33t) {
-		this.l33t = l33t;
-	}
 
-	// agregar logs
 	private void rotation(List<String> params, ProxyAtt attachment) {
 
 		String statusCode = "";
@@ -590,6 +598,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				}
 			}
 		}
+		
+		srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + statusCode + "\n");
 
 		ByteBuffer buf = attachment.getClntWr();
 		buf.put(statusCode.getBytes());
@@ -619,6 +629,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			}
 		}
 
+		srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + statusCode);
+		
 		ByteBuffer clnt_wr = attachment.getClntWr();
 		clnt_wr.put(statusCode.getBytes());
 
@@ -646,28 +658,56 @@ public class ProxySelectorProtocol implements TCPProtocol {
 		} else {
 			ByteBuffer clnt_wr = attachment.getClntWr();
 			String response = "-ERR[USRNEEDED] Need to provide a user.\r\n";
+			
+			srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + response +  "\n");
+			
 			clnt_wr.put(response.getBytes());
 			stats.addUsrNeeded();
 		}
+
+	}
+	
+	private void waitingRetr(ProxyAtt attachment) {
+
+		// Next I'm expecting the mail
+		attachment.getCalls().setEmail(true);
+
+		ByteBuffer serv_rd = attachment.getServerRd();
+		ByteBuffer clnt_wr = attachment.getClntWr();
+
+		String response = Common.transferData(serv_rd);
+
+		int index = response.indexOf('\r');
+
+		String substring = response.substring(0, index);
+		substring = substring + "\r\n";
+
+		clnt_wr.put(response.getBytes());
+
+		serv_rd.clear();
+		serv_rd.put((response.substring(index + 2, response.length()))
+				.getBytes());
 
 	}
 
 	private void processMail(ProxyAtt attachment) {
 
 		ByteBuffer srv_rd = attachment.getServerRd();
-		String debugStr = Common.transferData(srv_rd);
-		// srv_rd.flip();
 		try {
 
 			if (attachment.getMailParser().processMail(srv_rd)) {
 				attachment.getCalls().setEmail(false);
 				attachment.getCalls().setRetrMail(true);
 				attachment.getClntWr().putChar('.');
-				System.out.println("Fin de Mail");
 			}
 		} catch (IOException e) {
-
-			System.out.println("Se pudrio el rancho en retrMsg");
+			
+			String response = "-ERR[FAILED] Failed to retrieve mail.\r\n";
+			srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + response);
+			stats.addFailed();
+			
+			attachment.getClntWr().put(response.getBytes());
+			attachment.getCalls().setEmail(false);
 		}
 
 		srv_rd.clear();
@@ -690,6 +730,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				statusCode = "+OK The histogram is: \n" + stats.getHistogram();
 			}
 		}
+		
+		srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + statusCode + "\n");
 
 		ByteBuffer clnt_wr = attachment.getClntWr();
 		clnt_wr.put(statusCode.getBytes());
@@ -712,6 +754,8 @@ public class ProxySelectorProtocol implements TCPProtocol {
 				statusCode = "+OK The stats are: \n" + stats.getStats();
 			}
 		}
+		
+		srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + statusCode+ "\n");
 
 		ByteBuffer clnt_wr = attachment.getClntWr();
 		clnt_wr.put(statusCode.getBytes());
@@ -728,9 +772,13 @@ public class ProxySelectorProtocol implements TCPProtocol {
 			}
 
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-			System.out.println("se cago todo");
+			String response = "-ERR[FAILED] Failed to retrieve mail.\r\n";
+			srv_log.info((new Date()).toString() + " | [" + attachment.getUser() + "] server response: " + response);
+			stats.addFailed();
+			
+			clnt_wr.put(response.getBytes());
+			attachment.getCalls().setRetrMail(false);
+			
 		}
 
 	}

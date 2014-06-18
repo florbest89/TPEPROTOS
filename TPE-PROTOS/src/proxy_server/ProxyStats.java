@@ -16,6 +16,8 @@ public class ProxyStats {
 	private long errinvalid;
 	// total amount of -ERR[USERNEEDED] code
 	private long errusrnotprov;
+	//total amount of -ERR[FAILED] code
+	private long errfailed;
 
 	public ProxyStats() {
 	}
@@ -59,16 +61,21 @@ public class ProxyStats {
 		return "#+OK : " +this.timesok + "\n# -ERR[NOTADMIN] : " + this.errnotadmin
 				+ "\n# -ERR[INVALID] : " + this.errinvalid
 				+ "\n# -ERR[USRNEEDED] : " + this.errusrnotprov
-				+ "\n# -ERR (origin server) : " + getOriginServerErr() + "\r\n";
+				+ "\n# -ERR (origin server) : " + getOriginServerErr() 
+				+ "\n# -ERR[FAILED] : " + this.errfailed + "\r\n";
 	}
 	
 	public long getTimesErr(){
-		return errnotadmin + errinvalid + errusrnotprov + originServErr;
+		return errnotadmin + errinvalid + errusrnotprov + originServErr + errfailed;
 	}
 
 	public long getOriginServerErr() {
 		System.out.println("cantidad de errores de origin server " + originServErr);
 		return this.originServErr;
+	}
+
+	public void addFailed() {
+		errfailed =+ 1;		
 	}
 
 }

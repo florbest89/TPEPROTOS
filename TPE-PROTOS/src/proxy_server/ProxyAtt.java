@@ -86,6 +86,10 @@ public class ProxyAtt {
 		this.user = usr_prov;
 	}
 	
+	public String getUser(){
+		return user;
+	}
+	
 	public boolean usrProvided(){
 		return user != null;
 	}
